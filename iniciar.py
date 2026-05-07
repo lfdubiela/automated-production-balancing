@@ -36,9 +36,23 @@ print("""
 from app import app, init_db
 init_db()
 
+debug = os.environ.get('FLASK_DEBUG', '1') != '0'
+
 def open_browser():
     time.sleep(1.5)
     webbrowser.open('http://localhost:5000')
 
-threading.Thread(target=open_browser, daemon=True).start()
-app.run(debug=False, port=5000, host='0.0.0.0')
+# Werkzeug reloader fork: só abre browser no processo principal (evita 2x)
+if not debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    threading.Thread(target=open_browser, daemon=True).start()
+
+# Watch templates/ também (Werkzeug por default só monitora .py)
+import glob
+extra_files = glob.glob('templates/**/*.html', recursive=True) if debug else None
+
+print(f"  Hot reload: {'ON' if debug else 'OFF'} (FLASK_DEBUG={'0' if not debug else '1'})")
+if extra_files:
+    print(f"  Watching: {len(extra_files)} arquivo(s) HTML em templates/\n")
+else:
+    print()
+app.run(debug=debug, port=5000, host='0.0.0.0', use_reloader=debug, extra_files=extra_files)

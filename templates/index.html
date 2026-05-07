@@ -115,7 +115,14 @@ tr:last-child td{border-bottom:none}
 .oar{display:flex;align-items:center;gap:9px;margin-bottom:9px;background:#f8fafc;padding:7px 9px;border-radius:6px}
 @media(max-width:768px){.fg{grid-template-columns:1fr 1fr}.tgrid{grid-template-columns:1fr}}
 @media(max-width:480px){.fg{grid-template-columns:1fr}.stats-row{grid-template-columns:repeat(2,1fr)}}
-@media print{.navbar,.btn,.fa,.search-row{display:none!important}.page{display:block!important}}
+@media print{
+  .navbar,.btn,.fa,.search-row,.no-print{display:none!important}
+  .page{display:block!important;padding:0!important}
+  .page:not(.active){display:none!important}
+  body{background:#fff!important}
+  .relt-card{break-inside:avoid;page-break-inside:avoid}
+  .relt-matrix{font-size:9.5px}
+}
 </style>
 </head>
 <body>
@@ -131,6 +138,7 @@ tr:last-child td{border-bottom:none}
     <button class="nav-tab" onclick="nav('ops',this)">👤 Operadores</button>
     <button class="nav-tab" onclick="nav('eqs',this)">🔧 Equipamentos</button>
     <button class="nav-tab" onclick="nav('opcs',this)">🗂️ Operações</button>
+    <button class="nav-tab" onclick="nav('cfg',this)">⚙️ Configurações</button>
   </div>
 </nav>
 <div id="toast"></div>
@@ -174,6 +182,41 @@ tr:last-child td{border-bottom:none}
         <thead><tr><th>Código</th><th>Nome</th><th>Usos no Banco</th><th>Ações</th></tr></thead>
         <tbody id="opc-tb"></tbody>
       </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIGURAÇÕES -->
+<div id="page-cfg" class="page">
+  <div class="card">
+    <div class="card-hd">⚙️ Configurações do Sistema</div>
+    <div class="card-bd">
+      <div class="fg">
+        <div class="fgrp"><label>Gordura % <small style="color:var(--cinza)">(perdas/setup/fadiga)</small></label>
+          <input type="number" id="cfg-gordura" min="0" max="100" step="0.1" value="15" style="width:100px"></div>
+        <div class="fgrp"><label>Tolerância Ceil % <small style="color:var(--cinza)">(margem antes de arredondar pessoas/op)</small></label>
+          <input type="number" id="cfg-tol" min="0" max="100" step="0.1" value="15" style="width:100px"></div>
+        <div class="fgrp"><label>Arredondamento Pcs/Pacote</label>
+          <select id="cfg-arred" style="width:120px">
+            <option value="down">Down (truncar)</option>
+            <option value="up">Up (cima)</option>
+            <option value="zero">Zero</option>
+          </select>
+        </div>
+        <div class="fgrp"><label>Min/dia padrão</label>
+          <input type="number" id="cfg-mindia" min="1" value="540" style="width:100px"></div>
+        <div class="fgrp"><label>Ciclo curto padrão (min)</label>
+          <input type="number" id="cfg-ciclo" min="1" step="0.5" value="15" style="width:100px"></div>
+        <div class="fgrp"><label>Ocupação mínima % <small style="color:var(--cinza)">(operador "exclusivo")</small></label>
+          <input type="number" id="cfg-ocup" min="0" max="100" step="1" value="95" style="width:100px"></div>
+      </div>
+      <div style="margin:12px 0;padding:10px 14px;background:#fef3c7;border:1px solid #fbbf24;border-radius:7px;font-size:12px;color:#78350f">
+        ℹ️ <strong>Gordura</strong> reduz a eficiência real internamente (eficiência mostrada × (1−gordura/100)). Usuário sempre vê 100% mesmo que real seja 85%.
+      </div>
+      <div class="fa">
+        <button class="btn bs" onclick="saveCfg()">💾 Salvar Configurações</button>
+        <button class="btn bg" onclick="loadCfg()">↻ Recarregar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -273,16 +316,40 @@ tr:last-child td{border-bottom:none}
 <!-- JOGUINHO BALANCEAMENTO -->
 <!-- REMANEJO -->
 <div id="page-rem" class="page">
+  <!-- TABELA REMANEJOS -->
+  <div id="rem-list-card" class="card">
+    <div class="card-hd">📋 Remanejos Cadastrados <span id="rem-list-cnt" style="background:rgba(255,255,255,.22);padding:1px 9px;border-radius:18px;font-size:11px"></span>
+      <div style="display:flex;gap:5px">
+        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="newRem()">＋ Novo Remanejo</button>
+      </div>
+    </div>
+    <div class="card-bd">
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Nome</th><th>Sequência</th><th>Operadores</th><th>Ops cobertas</th><th>Bals usando</th><th>Criado em</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="rem-list-tb"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- EDITOR REMANEJO (oculto até clicar Novo ou Editar) -->
+  <div id="rem-editor-card" style="display:none">
   <div class="card">
-    <div class="card-hd a">🔄 Remanejo de Operadores
-      <div style="display:flex;gap:8px;align-items:center">
+    <div class="card-hd a">🔄 <span id="rem-editor-title">Novo Remanejo</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" id="rem-id">
+        <input type="text" id="rem-nome" placeholder="Nome (auto = nome da seq)" style="padding:5px 10px;border-radius:6px;border:none;font-size:12.5px;background:rgba(255,255,255,.18);color:#fff;min-width:200px">
         <select id="rem-seq" style="padding:5px 10px;border-radius:6px;border:none;font-size:12.5px;background:rgba(255,255,255,.18);color:#fff;min-width:230px">
           <option value="">— Selecione a sequência —</option>
         </select>
         <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="startRem()">▶ Iniciar</button>
+        <button id="rem-save" class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff;display:none" onclick="saveAndAdvanceRem()" disabled>💾 Salvar e Avançar</button>
+        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="closeRemEditor()">✖ Fechar</button>
       </div>
     </div>
   </div>
+  <div id="rem-status" style="display:none;margin:8px 0 0;padding:10px 14px;border-radius:8px;font-size:12.5px"></div>
   <div id="rem-main" style="display:none;margin-top:0">
     <div style="display:grid;grid-template-columns:310px 1fr;gap:16px">
       <div class="card" style="margin-top:0">
@@ -299,48 +366,84 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
   </div>
+  </div>
 </div>
 
 <div id="page-jog" class="page">
-  <div class="card">
-    <div class="card-hd a">🎮 Balanceamento — Arraste Operações para os Times
+  <div id="j-rem-info" style="display:none;margin-bottom:8px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;font-size:12.5px;color:#1e40af"></div>
+
+  <!-- TABELA DE BALANCEAMENTOS -->
+  <div id="j-list-card" class="card">
+    <div class="card-hd">📋 Balanceamentos Cadastrados <span id="j-list-cnt" style="background:rgba(255,255,255,.22);padding:1px 9px;border-radius:18px;font-size:11px"></span>
       <div style="display:flex;gap:5px">
-        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="autoBalance()">⚡ Auto-Bal.</button>
-        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="clearJog()">✖ Limpar</button>
+        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="newJog()">＋ Novo Balanceamento</button>
+      </div>
+    </div>
+    <div class="card-bd">
+      <div class="tw"><table>
+        <thead><tr>
+          <th>Nome</th><th>Prod/Ref</th><th>Sequência</th><th>Estado</th>
+          <th>Meta/dia</th><th>Ciclo</th><th>Pcs/Pac</th>
+          <th>Min/peça</th><th>Pess. Nec.</th><th>Pess. Aloc.</th>
+          <th>Times</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="j-list-tb"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- EDITOR (oculto até clicar Novo ou Editar) -->
+  <div id="j-editor-card" class="card" style="display:none">
+    <div class="card-hd a">🎮 <span id="j-editor-title">Novo Balanceamento</span>
+      <span id="j-estado-badge" style="background:rgba(255,255,255,.22);padding:2px 10px;border-radius:13px;font-size:10.5px;font-weight:700;margin-left:8px">🟡 Created</span>
+      <div style="display:flex;gap:5px">
+        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="autoBalanceTakt()" title="Cronoanálise → takt → particiona em times">⚡ Balancear</button>
+        <button class="btn bsm" style="background:rgba(255,255,255,.22);color:#fff" onclick="closeJogEditor()">✖ Fechar</button>
       </div>
     </div>
     <div class="bc">
+      <input type="hidden" id="j-id">
+      <input type="hidden" id="j-bal-sel">
       <div class="fgrp"><label>Nome do Balanceamento</label><input type="text" id="j-nome" placeholder="Nome do bal."></div>
-      <div class="fgrp"><label>Produto / Ref.</label><input type="text" id="j-prod" placeholder="Ex: Jaqueta B"></div>
+      <div class="fgrp"><label>Produto / Ref.</label><input type="text" id="j-prod" placeholder="Ex: PY - CALÇA BASICA"></div>
       <div class="fgrp" style="min-width:200px"><label>Sequência</label><select id="j-seq" onchange="loadJogSeq()"><option value="">— Selecione —</option></select></div>
-      <div class="fgrp"><label>Ciclo Padrão (min)</label><div class="cwrap" id="c-btns"></div></div>
-      <div class="fgrp"><label>Ciclo Custom</label><input type="number" id="j-ciclo" value="30" min="1" step="0.5" style="width:78px" oninput="setCicloC(this.value)"></div>
-      <div class="fgrp"><label>Eficiência %</label><input type="number" id="j-efic" value="100" min="1" max="100" style="width:72px"></div>
-      <div class="fgrp"><label>Nº Times</label><input type="number" id="j-nt" value="5" min="1" max="50" style="width:72px" oninput="buildTimes()"></div>
-      <div class="fgrp"><label>Meta/dia (pçs)</label><input type="number" id="j-meta" value="864" style="width:85px"></div>
+      <div class="fgrp" style="min-width:180px"><label>Remanejo (pool)</label><select id="j-remanejo" onchange="onRemanejoChange()"><option value="">— Sem pool —</option></select></div>
+      <div class="fgrp"><label>Min/Dia</label><input type="number" id="j-mins" value="540" min="1" style="width:78px" oninput="updTakt()"></div>
+      <div class="fgrp"><label>Ciclo Curto (min)</label><input type="number" id="j-ciclo" value="15" min="1" step="0.5" style="width:78px" oninput="updTakt()"></div>
+      <div class="fgrp"><label>Eficiência %</label><input type="number" id="j-efic" value="100" min="1" max="100" style="width:72px" oninput="updTakt()"></div>
+      <div class="fgrp"><label>Operadoras Disp.</label><input type="number" id="j-oper" value="26" min="1" style="width:78px" oninput="updTakt()"></div>
+      <div class="fgrp"><label>Nº Times</label><input type="number" id="j-nt" value="10" min="1" max="50" style="width:72px" oninput="buildTimes()"></div>
       <div class="fgrp" style="align-self:flex-end"><button class="btn bs" onclick="saveJog()">💾 Salvar Balanceamento</button></div>
     </div>
     <div class="ibar">
-      <div class="iitem"><div class="iv" id="i-ciclo" style="color:var(--azul)">30 min</div><div class="il">Ciclo</div></div>
       <div class="iitem"><div class="iv" id="i-total" style="color:var(--verde)">0.000</div><div class="il">T.P. Total</div></div>
+      <div class="iitem"><div class="iv" id="i-pcp" style="color:var(--azul)">—</div><div class="il">Pcs/Pacote</div></div>
+      <div class="iitem"><div class="iv" id="i-meta" style="color:var(--verde)">—</div><div class="il">Meta/dia</div></div>
+      <div class="iitem"><div class="iv" id="i-pcab" style="color:var(--azul)">—</div><div class="il">Peças/cab</div></div>
+      <div class="iitem"><div class="iv" id="i-takt" style="color:var(--azul)">—</div><div class="il">Takt (min/pç)</div></div>
+      <div class="iitem"><div class="iv" id="i-cdia" style="color:var(--cinza)">—</div><div class="il">Ciclos/dia</div></div>
+      <div class="iitem"><div class="iv" id="i-pesnec" style="color:var(--verde)">—</div><div class="il">Pessoas Nec.</div></div>
+      <div class="iitem"><div class="iv" id="i-pesceil" style="color:var(--amar)">—</div><div class="il">Op. Reais</div></div>
       <div class="iitem"><div class="iv" id="i-pool" style="color:var(--amar)">0</div><div class="il">No Pool</div></div>
       <div class="iitem"><div class="iv" id="i-aloc" style="color:var(--verde)">0</div><div class="il">Alocadas</div></div>
       <div class="iitem"><div class="iv" id="i-times">0</div><div class="il">Times</div></div>
-      <div class="iitem"><div class="iv" id="i-efic" style="color:var(--cinza)">—</div><div class="il">Ef.Média</div></div>
-      <div class="iitem"><div class="iv" id="i-meta" style="color:var(--cinza)">—</div><div class="il">Meta Est./dia</div></div>
+      <div class="iitem"><div class="iv" id="i-gargalos" style="color:#ea580c">—</div><div class="il">⚠ Gargalos</div></div>
     </div>
     <div style="padding:9px 14px">
       <div style="font-size:11px;font-weight:700;color:var(--cinza);margin-bottom:4px;text-transform:uppercase">🎯 Pool de Operações — arraste para os times</div>
       <div id="jpool" class="pool"></div>
     </div>
-    <div style="padding:3px 14px 10px;display:flex;gap:6px;flex-wrap:wrap">
-      <span style="font-size:10.5px;color:var(--cinza);font-weight:700">Equip.:</span>
-      <span class="bdg bg-b" style="font-size:10px">Reta Auto.</span>
-      <span class="bdg bg-g" style="font-size:10px">Manual</span>
-      <span class="bdg" style="font-size:10px;background:#fce7f3;color:#9d174d">Interlock</span>
-      <span class="bdg bg-y" style="font-size:10px">P. Corrente</span>
-      <span class="bdg" style="font-size:10px;background:#f3e8ff;color:#6b21a8">Ferro</span>
-      <span class="bdg bg-gr" style="font-size:10px">Outros</span>
+    <div id="jpool-opers-wrap" style="padding:9px 14px;display:none;border-top:1px dashed var(--borda)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <div style="font-size:11px;font-weight:700;color:var(--cinza);text-transform:uppercase">👥 Pool de Operadores (do remanejo) — arraste para as operações dos times</div>
+        <button id="btn-alocar" class="btn bsm bs" onclick="alocarOperadores()" style="display:none">🤝 Alocar Operadores Auto</button>
+      </div>
+      <div id="jpool-opers" class="pool"></div>
+    </div>
+    <div style="padding:6px 14px 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--borda)">
+      <span style="font-size:10.5px;color:var(--cinza);font-weight:700">Equipamentos:</span>
+      <span id="eq-tags" style="display:flex;gap:5px;flex-wrap:wrap;flex:1"></span>
+      <button id="eq-toggle-all" class="btn bxs bw" onclick="toggleAllEqs()">☑ Desmarcar todos</button>
     </div>
     <div id="tgrid" class="tgrid"></div>
   </div>
@@ -348,20 +451,27 @@ tr:last-child td{border-bottom:none}
 
 <!-- DIVISÃO DE TIMES -->
 <div id="page-div" class="page">
-  <div class="card">
+  <div class="card no-print">
     <div class="card-hd">👥 Divisão de Operações e Cargas por Colaborador</div>
     <div class="card-bd">
       <div style="display:flex;gap:11px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
         <div class="fgrp" style="min-width:280px"><label>Selecionar Balanceamento</label>
           <select id="dv-sel" onchange="loadDiv()"><option value="">— Selecione —</option></select>
         </div>
-        <button class="btn bp bsm" onclick="window.print()">🖨️ Imprimir</button>
-        <button id="dv-exp" class="btn bo bsm" style="display:none" onclick="expDiv()">📥 Exportar CSV</button>
+        <div class="fgrp"><label>Modo</label>
+          <select id="dv-modo" onchange="loadDiv()" style="min-width:140px">
+            <option value="cards">📋 Cards by Time</option>
+            <option value="matriz">⊞ Matriz Op×Colab</option>
+          </select>
+        </div>
+        <button class="btn bp bsm" onclick="window.print()">🖨️ Imprimir / PDF</button>
+        <button id="dv-exp" class="btn bo bsm" style="display:none" onclick="expDivCsv()">📥 CSV</button>
+        <button id="dv-xlsx" class="btn bo bsm" style="display:none;background:#16a34a;color:#fff" onclick="expDivXlsx()">📊 Excel</button>
         <button class="btn bsm" style="background:var(--verm);color:#fff;display:none" id="dv-del" onclick="delBal()">🗑 Excluir Bal.</button>
       </div>
-      <div id="div-body"><div class="empty"><div class="ei">📂</div><p>Selecione um balanceamento</p></div></div>
     </div>
   </div>
+  <div id="div-body"><div class="empty"><div class="ei">📂</div><p>Selecione um balanceamento</p></div></div>
 </div>
 
 <!-- OPERADORES -->
@@ -429,6 +539,9 @@ tr:last-child td{border-bottom:none}
         <div class="fgrp"><label>Nº Patrimônio</label><input type="text" id="eq-pat"></div>
         <div class="fgrp"><label>Status</label>
           <select id="eq-st"><option>Ativo</option><option>Em Manutenção</option><option>Inativo</option></select>
+        </div>
+        <div class="fgrp"><label>Cor</label>
+          <input type="color" id="eq-cor" value="#94a3b8" style="width:60px;height:36px;padding:2px;border:1px solid var(--borda);border-radius:6px;cursor:pointer">
         </div>
         <div class="fgrp fg2"><label>Observações</label><textarea id="eq-obs" rows="2"></textarea></div>
       </div>
@@ -512,15 +625,25 @@ function toast(msg,t='success'){
   document.getElementById('toast').appendChild(el);
   setTimeout(()=>el.remove(),3000);
 }
+// Helpers de cor: clarear/escurecer hex
+function _hexToRgb(h){h=(h||'#94a3b8').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+function _mix(rgb,target,pct){return rgb.map((c,i)=>Math.round(c+(target[i]-c)*pct));}
+function _rgbStr(rgb){return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;}
+function _luma(rgb){return 0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2];}
+function corEquip(nome){
+  // Procura no cadastro por nome (case-insensitive)
+  if(!nome)return'#94a3b8';
+  const n=nome.trim().toUpperCase();
+  const e=(AE||[]).find(x=>(x.nome||'').toUpperCase()===n);
+  return (e&&e.cor)||'#94a3b8';
+}
 function chipStyle(eq){
-  const e=(eq||'').toUpperCase();
-  if(e.includes('RETA')||e.includes('AUTOMATI'))return'background:#dbeafe;border-color:#3b82f6;color:#1d4ed8';
-  if(e.includes('MANUAL'))return'background:#dcfce7;border-color:#22c55e;color:#15803d';
-  if(e.includes('INTERLOCK'))return'background:#fce7f3;border-color:#ec4899;color:#9d174d';
-  if(e.includes('PONTO'))return'background:#fef3c7;border-color:#f59e0b;color:#92400e';
-  if(e.includes('FERRO'))return'background:#f3e8ff;border-color:#a855f7;color:#6b21a8';
-  if(e.includes('CASEADO'))return'background:#ffe4e6;border-color:#f43f5e;color:#9f1239';
-  return'background:#f1f5f9;border-color:#94a3b8;color:#334155';
+  const cor=corEquip(eq);
+  const rgb=_hexToRgb(cor);
+  const bg=_rgbStr(_mix(rgb,[255,255,255],0.78));
+  const bord=cor;
+  const txt=_luma(rgb)>140?'#1e293b':_rgbStr(_mix(rgb,[0,0,0],0.45));
+  return `background:${bg};border-color:${bord};color:${txt}`;
 }
 function tcol(pct){return pct>100?'#dc2626':pct>90?'#d97706':pct>70?'#16a34a':'#2563eb';}
 function mCPF(el){let v=el.value.replace(/\D/g,'').slice(0,11);v=v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');el.value=v;}
@@ -644,22 +767,67 @@ function buildSqPool(){
       <div style="text-align:right"><div style="font-size:10.5px;color:var(--cinza)">${(b.tempo_padrao||0).toFixed(4)}</div><button class="btn bs bxs" style="margin-top:2px">+Add</button></div>
     </div>`).join(''):'<p style="text-align:center;font-size:12px;color:var(--cinza);padding:14px">Nenhuma operação</p>';
 }
-function addToSq(id){const b=AB.find(x=>x.id===id);if(b){SqI.push({...b});renderSqSel();}}
-function addAllToSq(){const q=document.getElementById('sq-flt').value.toLowerCase();const fil=AB.filter(b=>!q||b.operacao.toLowerCase().includes(q)||(b.equipamento_nome||'').toLowerCase().includes(q));fil.forEach(b=>SqI.push({...b}));renderSqSel();toast(fil.length+' operações adicionadas!','info');}
+function addToSq(id){const b=AB.find(x=>x.id===id);if(b){SqI.push({...b,depende_de:[]});renderSqSel();}}
+function addAllToSq(){const q=document.getElementById('sq-flt').value.toLowerCase();const fil=AB.filter(b=>!q||b.operacao.toLowerCase().includes(q)||(b.equipamento_nome||'').toLowerCase().includes(q));fil.forEach(b=>SqI.push({...b,depende_de:[]}));renderSqSel();toast(fil.length+' operações adicionadas!','info');}
 function renderSqSel(){
-  document.getElementById('sq-sel').innerHTML=SqI.length?SqI.map((b,i)=>`
-    <div style="display:flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid var(--borda);border-radius:5px;margin-bottom:2px;background:#fff;font-size:12px">
-      <span style="color:var(--cinza);font-size:10.5px;font-weight:700;min-width:18px">${i+1}.</span>
-      <span style="flex:1"><strong>${b.operacao}</strong> <span class="bdg bg-b" style="font-size:9.5px;margin-left:3px">${b.equipamento_nome||'—'}</span></span>
-      <span style="color:var(--azul);font-weight:700;min-width:52px;text-align:right">${(b.tempo_padrao||0).toFixed(4)}</span>
-      <button class="btn bd bxs" onclick="remSq(${i})">✕</button>
-    </div>`).join(''):
+  // Garante depende_de array em cada item
+  SqI.forEach(b=>{if(!Array.isArray(b.depende_de))b.depende_de=[];});
+  document.getElementById('sq-sel').innerHTML=SqI.length?SqI.map((b,i)=>{
+    const deps=b.depende_de||[];
+    const earlier=SqI.slice(0,i);
+    const depPicker=earlier.length?`<details style="margin-top:4px"><summary style="cursor:pointer;font-size:10.5px;color:var(--azul);font-weight:600">+ Selecionar predecessores (${deps.length} marcados)</summary>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:#fff;border:1px dashed var(--borda);border-radius:5px;margin-top:4px">
+        ${earlier.map((x,xi)=>{const ck=deps.includes(x.id);return`<label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;padding:3px 7px;border:1px solid ${ck?'var(--azul)':'var(--borda)'};border-radius:4px;background:${ck?'#dbeafe':'#fff'}"><input type="checkbox" ${ck?'checked':''} onchange="toggleSqDep(${i},${x.id})" style="margin:0">${xi+1}. ${x.operacao}</label>`;}).join('')}
+      </div></details>`:'';
+    const depLbl=deps.length?deps.map(id=>{const idx=SqI.findIndex(x=>x.id===id);const p=SqI[idx];return p?`<span class="bdg bg-y" style="font-size:9.5px;margin-right:3px">${idx+1}.${p.operacao}</span>`:'';}).join(''):'<span style="color:var(--cinza);font-size:10.5px;font-style:italic">— independente —</span>';
+    return`<div style="border:1px solid var(--borda);border-radius:5px;margin-bottom:3px;background:#fff;font-size:12px">
+      <div style="display:flex;align-items:center;gap:5px;padding:4px 7px">
+        <span style="color:var(--cinza);font-size:10.5px;font-weight:700;min-width:18px">${i+1}.</span>
+        <span style="flex:1"><strong>${b.operacao}</strong> <span class="bdg bg-b" style="font-size:9.5px;margin-left:3px">${b.equipamento_nome||'—'}</span></span>
+        <span style="color:var(--azul);font-weight:700;min-width:52px;text-align:right">${(b.tempo_padrao||0).toFixed(4)}</span>
+        <button class="btn bd bxs" onclick="remSq(${i})">✕</button>
+      </div>
+      <div style="padding:4px 7px 6px;border-top:1px dashed var(--borda);background:#fafafa">
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--cinza);font-weight:700;text-transform:uppercase">Depende de:</span>
+          <span style="flex:1">${depLbl}</span>
+        </div>
+        ${depPicker}
+      </div>
+    </div>`;}).join(''):
     '<p style="text-align:center;color:var(--cinza);padding:18px;font-size:13px">Clique nas operações à esquerda</p>';
   const total=SqI.reduce((a,b)=>a+(b.tempo_padrao||0),0);
   document.getElementById('sq-tp').textContent=total.toFixed(4);
   document.getElementById('sq-cnt').textContent=SqI.length;
 }
-function remSq(i){SqI.splice(i,1);renderSqSel();}
+function toggleSqDep(itemIdx,depId){
+  const it=SqI[itemIdx]; if(!it)return;
+  if(!Array.isArray(it.depende_de))it.depende_de=[];
+  const i=it.depende_de.indexOf(depId);
+  if(i===-1)it.depende_de.push(depId);else it.depende_de.splice(i,1);
+  renderSqSel();
+}
+function addSqDep(itemIdx,depIdStr){
+  const depId=parseInt(depIdStr,10);
+  if(!depId)return;
+  const it=SqI[itemIdx]; if(!it)return;
+  if(!Array.isArray(it.depende_de))it.depende_de=[];
+  if(!it.depende_de.includes(depId))it.depende_de.push(depId);
+  renderSqSel();
+}
+function rmSqDep(itemIdx,depId){
+  const it=SqI[itemIdx]; if(!it||!Array.isArray(it.depende_de))return;
+  it.depende_de=it.depende_de.filter(x=>x!==depId);
+  renderSqSel();
+}
+function remSq(i){
+  const removed=SqI[i];
+  SqI.splice(i,1);
+  if(removed){
+    SqI.forEach(b=>{if(Array.isArray(b.depende_de))b.depende_de=b.depende_de.filter(x=>x!==removed.id);});
+  }
+  renderSqSel();
+}
 async function loadSeqs(){
   const seqs=await api('/api/sequencias');
   document.getElementById('sq-list').innerHTML=seqs.length?seqs.map(s=>`
@@ -697,28 +865,487 @@ function clearSF(){document.getElementById('sq-id').value='';document.getElement
 
 // ─── JOGUINHO ────────────────────────────────────────────
 JogO=[];JogT=[];
-function buildCiclo(){document.getElementById('c-btns').innerHTML=CICLOS.map(c=>`<button class="cbtn${c===30?' active':''}" onclick="setCiclo(${c})">${c}</button>`).join('');}
-function setCiclo(v){ciclo=+v;document.getElementById('j-ciclo').value=v;document.getElementById('i-ciclo').textContent=v+' min';document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('active',+b.textContent===+v));renderTGrid();updInd();}
-function setCicloC(v){ciclo=+v;document.getElementById('i-ciclo').textContent=v+' min';document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('active'));renderTGrid();updInd();}
+let JogRemanejoId=null,JogAtribuicoes={},JogOperadores=[];
+// JogTakt: estado calculado pelo último auto/takt (pcs_pacote, meta_dia, takt, etc)
+let JogTakt={pcs_pacote:0,meta_dia:0,pcs_cab:0,takt:0,ciclos_dia:0,total_pessoas_decimal:0,total_pessoas_round:0,gordura_pct:15};
+// Pool de operadores do remanejo + atribuições op→operador
+let JogPoolOps=[];          // [{id, nome, funcao, operacoes(JSON), equipamentos_ids(JSON), tempo_alocado, ocupacao_pct}]
+let JogAtribOps=[];         // [{op_id, operador_id, tempo_min, qualificado, numero_time}]
+let JogEstado='created';
+function estadoLabel(e){return{created:'🟡 Created',balanced:'🔵 Balanced',concluido:'🟢 Concluído'}[e]||e;}
+function updEstadoBadge(){
+  const el=document.getElementById('j-estado-badge');if(!el)return;
+  el.textContent=estadoLabel(JogEstado);
+}
+// EqFiltro: Set com nomes de equipamentos VISÍVEIS (selecionados) — UPPERCASE
+let EqFiltro=new Set();
+function eqsUsados(){
+  // Equipamentos únicos das ops da seq atual (UPPERCASE)
+  return [...new Set(JogO.map(o=>(o.equipamento_nome||'').trim().toUpperCase()).filter(Boolean))].sort();
+}
+function renderEqTags(){
+  const wrap=document.getElementById('eq-tags');if(!wrap)return;
+  const eqs=eqsUsados();
+  // Remove do filtro o que não está mais na seq (sem auto-adicionar)
+  for(const e of [...EqFiltro])if(!eqs.includes(e))EqFiltro.delete(e);
+  wrap.innerHTML=eqs.map(e=>{
+    const ativo=EqFiltro.has(e);
+    const cor=corEquip(e);
+    const rgb=_hexToRgb(cor);
+    const bg=ativo?cor:_rgbStr(_mix(rgb,[255,255,255],0.85));
+    const txt=ativo?(_luma(rgb)>140?'#1e293b':'#fff'):'#64748b';
+    return `<span onclick="toggleEq('${e.replace(/'/g,"\\'")}')" style="cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:13px;background:${bg};color:${txt};border:1.5px solid ${cor};opacity:${ativo?'1':'0.55'};text-transform:uppercase;user-select:none">${ativo?'●':'○'} ${e}</span>`;
+  }).join('')||'<span style="color:var(--cinza);font-size:11px;font-style:italic">— selecione uma sequência —</span>';
+  // Atualiza label do botão único
+  const btn=document.getElementById('eq-toggle-all');
+  if(btn){
+    const total=eqs.length;
+    const sel=eqs.filter(e=>EqFiltro.has(e)).length;
+    const todos=total>0&&sel===total;
+    btn.textContent=todos?'☑ Desmarcar todos':'☐ Marcar todos';
+    btn.dataset.state=todos?'on':'off';
+  }
+}
+function toggleEq(eq){
+  if(EqFiltro.has(eq))EqFiltro.delete(eq);else EqFiltro.add(eq);
+  renderEqTags();renderTGrid();
+}
+function toggleAllEqs(){
+  const eqs=eqsUsados();
+  const total=eqs.length;
+  const sel=eqs.filter(e=>EqFiltro.has(e)).length;
+  const todos=total>0&&sel===total;
+  EqFiltro.clear();
+  if(!todos)eqs.forEach(e=>EqFiltro.add(e));
+  renderEqTags();renderTGrid();
+}
+function updTakt(){
+  // Sincroniza ciclo legacy com input ciclo curto
+  ciclo=+document.getElementById('j-ciclo').value||15;
+  // Calcula pcs_pacote/meta/takt no front a partir dos inputs
+  const minDia=+document.getElementById('j-mins').value||540;
+  const cicloCurto=+document.getElementById('j-ciclo').value||15;
+  const eficMostrada=(+document.getElementById('j-efic').value||100)/100;
+  const nOper=+document.getElementById('j-oper').value||0;
+  const gordura=parseFloat(CFG.gordura_pct||15)/100;
+  const arred=CFG.arred_pacote||'down';
+  const totalTp=JogO.reduce((a,o)=>a+(o.tempo_padrao||0),0);
+  const ciclosDia=cicloCurto>0?minDia/cicloCurto:0;
+  const eficReal=eficMostrada*(1-gordura);
+  const pcsRaw=(totalTp>0&&ciclosDia>0&&nOper>0)?(minDia/totalTp)*nOper*eficReal/ciclosDia:0;
+  let pcs=0;
+  if(arred==='up')pcs=Math.ceil(pcsRaw-1e-9);
+  else if(arred==='zero')pcs=0;
+  else pcs=Math.floor(pcsRaw+1e-9);
+  const metaDia=pcs*ciclosDia;
+  const pcsCab=nOper>0?metaDia/nOper:0;
+  const takt=pcs>0?cicloCurto/pcs:0;
+  const totPessoas=takt>0?totalTp/takt:0;
+  JogTakt={pcs_pacote:pcs,meta_dia:metaDia,pcs_cab:pcsCab,takt,ciclos_dia:ciclosDia,total_pessoas_decimal:totPessoas,total_pessoas_round:Math.round(totPessoas),gordura_pct:CFG.gordura_pct,total_tp:totalTp};
+  updInd();
+}
 async function loadJogSeqs(){
   const seqs=await api('/api/sequencias');
   const s=document.getElementById('j-seq');
   s.innerHTML='<option value="">— Selecione —</option>'+seqs.map(x=>`<option value="${x.id}">${x.nome} (${x.itens.length} ops)</option>`).join('');
-  buildCiclo();
+  await loadJogList();
+}
+let JogList=[];
+async function loadJogList(){
+  try{
+    const bals=await api('/api/balanceamentos');
+    const finals=bals.filter(b=>b.status!=='remanejo');
+    JogList=finals;
+    renderJogList();
+  }catch(_){}
+}
+function renderJogList(){
+  const tb=document.getElementById('j-list-tb');if(!tb)return;
+  document.getElementById('j-list-cnt').textContent=JogList.length;
+  if(!JogList.length){
+    tb.innerHTML='<tr><td colspan="11" style="text-align:center;padding:25px;color:var(--cinza)">Nenhum balanceamento. Clique em ＋ Novo Balanceamento.</td></tr>';
+    return;
+  }
+  tb.innerHTML=JogList.map(b=>{
+    const ciclo=b.ciclo_minutos||0;
+    const pcs=b.pcs_pacote||0;
+    const minPeca=pcs>0?(ciclo/pcs).toFixed(4):'—';
+    // Pessoas necessárias = TP_total / takt = TP_total × pcs_pacote / ciclo
+    let tpTotal=0;
+    (b.times||[]).forEach(t=>{
+      try{const ops=JSON.parse(t.operacoes||'[]');tpTotal+=ops.reduce((a,o)=>a+(o.tempo_padrao||0),0);}catch(_){}
+    });
+    const pessoasNec=(pcs>0&&ciclo>0)?(tpTotal*pcs/ciclo):0;
+    // Pessoas alocadas = count distinct de operadores em balanceamento_atribuicoes (vem do backend)
+    const pessoasAloc=b.pessoas_alocadas||0;
+    const nTimes=(b.times||[]).length;
+    const estado=b.estado||'created';
+    const estadoLbl={'created':'🟡 Created','balanced':'🔵 Balanced','concluido':'🟢 Concluído'}[estado]||estado;
+    const estadoCol={'created':'#fef3c7;color:#78350f','balanced':'#dbeafe;color:#1d4ed8','concluido':'#dcfce7;color:#166534'}[estado]||'#f1f5f9;color:#334155';
+    return `<tr>
+      <td><strong>${b.nome||'—'}</strong></td>
+      <td>${b.produto||'—'}</td>
+      <td><span class="bdg bg-b">${b.sequencia_nome||'—'}</span></td>
+      <td><span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:11px;background:${estadoCol}">${estadoLbl}</span></td>
+      <td><strong>${b.meta_dia||'—'}</strong></td>
+      <td>${ciclo} min</td>
+      <td>${pcs||'—'}</td>
+      <td>${minPeca}</td>
+      <td>${pessoasNec?pessoasNec.toFixed(2):'—'}</td>
+      <td>${pessoasAloc||'—'}</td>
+      <td>${nTimes}</td>
+      <td>
+        <button class="btn bw bxs" onclick="editJog(${b.id})">✏️</button>
+        <button class="btn bd bxs" onclick="delJog(${b.id})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function showJogEditor(title){
+  const lc=document.getElementById('j-list-card');
+  const ec=document.getElementById('j-editor-card');
+  if(lc)lc.style.display='none';
+  if(ec)ec.style.display='';
+  if(title)document.getElementById('j-editor-title').textContent=title;
+}
+function closeJogEditor(){
+  const lc=document.getElementById('j-list-card');
+  const ec=document.getElementById('j-editor-card');
+  if(lc)lc.style.display='';
+  if(ec)ec.style.display='none';
+  loadJogList();
+}
+function newJog(){
+  clearJog();
+  showJogEditor('Novo Balanceamento');
+}
+async function editJog(id){
+  await loadJogFromBal(id);
+  showJogEditor(`Editar Balanceamento #${id}`);
+}
+async function delJog(id){
+  const b=JogList.find(x=>x.id===id);
+  const nome=b?b.nome:'#'+id;
+  if(!confirm(`Excluir balanceamento "${nome}"?\n\nSerá movido pra lixeira (soft delete) — pode ser recuperado.`))return;
+  try{
+    await api('/api/balanceamentos/'+id,'DELETE');
+    toast('Balanceamento excluído (soft delete).','info');
+    loadJogList();
+  }catch(e){toast('Erro: '+e.message,'error');}
+}
+async function loadJogFromBal(bid){
+  if(!bid){clearJog();return;}
+  const bals=await api('/api/balanceamentos');
+  const b=bals.find(x=>x.id===+bid);if(!b){toast('Balanceamento não encontrado','error');return;}
+  document.getElementById('j-id').value=b.id;
+  document.getElementById('j-nome').value=b.nome||'';
+  document.getElementById('j-prod').value=b.produto||'';
+  document.getElementById('j-mins').value=b.minutos_trabalhados||540;
+  document.getElementById('j-ciclo').value=b.ciclo_minutos||15;
+  document.getElementById('j-efic').value=Math.round((b.eficiencia||1)*100);
+  document.getElementById('j-oper').value=b.n_operadoras||26;
+  document.getElementById('j-nt').value=(b.times||[]).length||10;
+  JogEstado=b.estado||'created';
+  // Carrega sequência (popula JogO)
+  if(b.sequencia_id){
+    document.getElementById('j-seq').value=b.sequencia_id;
+    await loadJogSeq();
+  }
+  // Sobrescreve remanejo selecionado (loadJogSeq já populou dropdown com default)
+  if(b.remanejo_id){
+    const sel=document.getElementById('j-remanejo');
+    if(sel){sel.value=b.remanejo_id;await loadPoolFromRemanejo(b.remanejo_id);}
+  }
+  JogO.forEach(o=>o._in=false);
+  JogT=(b.times||[]).map(t=>{
+    let opsArr=[];try{opsArr=JSON.parse(t.operacoes||'[]');}catch(_){opsArr=[];}
+    const opsIds=opsArr.map(x=>x.id).filter(id=>JogO.find(o=>o.id===id));
+    opsIds.forEach(id=>{const o=JogO.find(x=>x.id===id);if(o)o._in=true;});
+    return{num:t.numero_time,ops:opsIds,op_refs:[],operadores:[]};
+  });
+  document.getElementById('j-nt').value=JogT.length;
+  updTakt();renderPool2();renderTGrid();updInd();
+  // Carrega pool + atribuições do remanejo
+  await loadAtribuicoes(b.id);
+  updEstadoBadge();
+}
+
+async function loadAtribuicoes(bid){
+  try{
+    const r=await api('/api/balanceamentos/'+bid+'/atribuicoes');
+    JogPoolOps=r.pool||[];
+    JogAtribOps=r.atribuicoes||[];
+    JogEstado=r.estado||'created';
+    renderOperPool();
+    renderTGrid();
+    updEstadoBadge();
+    refreshAlocarBtn();
+  }catch(_){
+    JogPoolOps=[];JogAtribOps=[];
+    renderOperPool();
+    refreshAlocarBtn();
+  }
+}
+
+function refreshAlocarBtn(){
+  const btn=document.getElementById('btn-alocar');if(!btn)return;
+  // Mostra quando todas ops estão alocadas em times (= pool ops vazio) E há pool de operadores
+  const opsPending=JogO.filter(o=>!o._in).length;
+  const showBtn=(opsPending===0 && JogO.length>0 && JogPoolOps.length>0);
+  btn.style.display=showBtn?'':'none';
+  // Mostra wrapper do pool de operadores se há pool
+  const wrap=document.getElementById('jpool-opers-wrap');
+  if(wrap)wrap.style.display=JogPoolOps.length>0?'':'none';
+}
+
+function operColor(op){
+  // Cor predominante: primeira equipamento_ids resolvida
+  try{
+    const eqs=JSON.parse(op.equipamentos_ids||'[]');
+    if(eqs.length){
+      const e=(AE||[]).find(x=>x.id===eqs[0]);
+      if(e&&e.cor)return e.cor;
+    }
+  }catch(_){}
+  return '#6366f1';
+}
+
+function renderOperPool(){
+  const wrap=document.getElementById('jpool-opers');if(!wrap)return;
+  const ocupMin=parseFloat(CFG.ocupacao_min_pct||95);
+  if(!JogPoolOps.length){
+    wrap.innerHTML='<span style="color:var(--cinza);font-size:11px;font-style:italic">Nenhum remanejo vinculado a esta sequência. Crie um remanejo na aba dedicada.</span>';
+    return;
+  }
+  wrap.innerHTML=JogPoolOps.map(o=>{
+    const cor=operColor(o);
+    const rgb=_hexToRgb(cor);
+    const bg=_rgbStr(_mix(rgb,[255,255,255],0.82));
+    const ocup=o.ocupacao_pct||0;
+    const livre=ocup<ocupMin;
+    const corOcup=ocup>=99?'#dc2626':ocup>=ocupMin?'#16a34a':ocup>0?'#f59e0b':'#94a3b8';
+    return `<div class="chip oper-chip${livre?' oper-livre':''}" data-oper-id="${o.id}" draggable="true" style="background:${bg};border:1.5px solid ${cor};color:#1e293b;display:flex;flex-direction:column;align-items:flex-start;gap:1px;cursor:grab" title="${o.funcao||''}\nQualificado em ${(JSON.parse(o.operacoes||'[]')).length} ops">
+      <div style="display:flex;align-items:center;gap:4px;width:100%">
+        <span style="font-weight:700;font-size:11px">${o.nome.split(' ').slice(0,2).join(' ')}</span>
+        <span style="font-size:9px;background:${corOcup};color:#fff;padding:1px 5px;border-radius:8px;margin-left:auto">${ocup.toFixed(0)}%</span>
+      </div>
+      <div style="font-size:9px;opacity:.75;display:flex;gap:3px">
+        <span>${o.funcao||'—'}</span>
+        ${livre?`<span style="color:#16a34a">▸ ${(100-ocup).toFixed(0)}% livre</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.oper-chip').forEach(el=>{
+    el.addEventListener('dragstart',e=>{
+      el.classList.add('dragging');
+      e.dataTransfer.setData('oper-id',el.dataset.operId);
+      e.dataTransfer.effectAllowed='copy';
+    });
+    el.addEventListener('dragend',()=>el.classList.remove('dragging'));
+  });
+}
+
+async function alocarOperadores(){
+  let bid=+document.getElementById('j-id').value;
+  if(!bid){
+    if(!confirm('Salvar balanceamento e auto-distribuir operadores?\n\n(O balanceamento será criado primeiro.)'))return;
+    const nome=document.getElementById('j-nome').value.trim();
+    if(!nome){toast('Informe o nome do balanceamento antes!','error');return;}
+    await saveJog({skipClose:true});
+    bid=+document.getElementById('j-id').value;
+    if(!bid){toast('Falha ao salvar balanceamento','error');return;}
+  }else{
+    if(!confirm('Auto-distribuir pool de operadores nas operações dos times?\n\nAtribuições anteriores serão substituídas.'))return;
+  }
+  try{
+    const r=await api('/api/balanceamentos/'+bid+'/alocar-operadores','POST');
+    JogEstado=r.estado;
+    if(r.warnings&&r.warnings.length){
+      toast(`${r.atribuicoes.length} atribuições. ${r.warnings.length} avisos (ver console).`,'info');
+      console.warn('Alocação warnings:', r.warnings);
+    }else{
+      toast(`${r.atribuicoes.length} atribuições criadas. Estado: ${estadoLabel(r.estado)}`);
+    }
+    await loadAtribuicoes(bid);
+  }catch(e){toast('Erro: '+e.message,'error');}
 }
 async function loadJogSeq(){
   const sid=document.getElementById('j-seq').value; if(!sid)return;
   const seqs=await api('/api/sequencias');
   const s=seqs.find(x=>x.id===+sid); if(!s)return;
-  JogO=s.itens.map(o=>({...o,_in:false}));
-  JogT=[]; document.getElementById('j-nt').value=5;
+  JogO=s.itens.map((o,i)=>({...o,op_idx:i,_in:false}));
+  JogT=[];
+  // Reseta estado de remanejo antes de tentar carregar pra essa seq
+  JogRemanejoId=null; JogAtribuicoes={}; JogOperadores=[];
+  const banner=document.getElementById('j-rem-info');
+  if(banner){banner.style.display='none';banner.innerHTML='';}
+  // Tenta carregar remanejo existente da sequência
+  try{
+    const ex=await api('/api/remanejos/por-sequencia/'+sid);
+    if(ex&&ex.id){
+      applyRemanejoToJog(ex);
+    }else{
+      document.getElementById('j-nt').value=10;
+    }
+  }catch(_){
+    document.getElementById('j-nt').value=10;
+  }
+  // Garante AE carregado pra cores e seleciona todos equipamentos por default
+  if(!AE||!AE.length){try{AE=await api('/api/equipamentos');}catch(_){AE=[];}}
+  EqFiltro.clear();
+  eqsUsados().forEach(e=>EqFiltro.add(e));
+  renderEqTags();
+  updTakt();
   renderPool2(); renderTGrid(); updInd();
+  // Carrega pool de operadores do remanejo dessa seq (se existir)
+  await loadPoolFromSeqRemanejo(sid);
 }
-function chipH(o){
-  return `<div class="chip" data-id="${o.id}" draggable="true" style="${chipStyle(o.equipamento_nome)}" title="${o.equipamento_nome||'—'} | T.P: ${(o.tempo_padrao||0).toFixed(4)}">
-    <span style="opacity:.6;font-size:9.5px">${o.seq||o.ordem||''}</span>
-    ${o.operacao.length>20?o.operacao.slice(0,20)+'…':o.operacao}
-    <span style="font-size:9.5px;background:rgba(0,0,0,.08);padding:1px 4px;border-radius:9px">${(o.tempo_padrao||0).toFixed(3)}</span>
+
+let JogRemanejosList=[];
+async function loadRemanejosForSeq(sid, preferRemId){
+  // Popula dropdown de remanejos da seq. Se preferRemId não vier, usa o mais recente (primeiro da lista).
+  const sel=document.getElementById('j-remanejo');if(!sel)return null;
+  if(!sid){sel.innerHTML='<option value="">— Sem pool —</option>';JogRemanejosList=[];return null;}
+  try{
+    const list=await api('/api/remanejos?sequencia_id='+sid);
+    JogRemanejosList=list;
+    if(!list.length){
+      sel.innerHTML='<option value="">— Sem remanejo (crie em Remanejo)</option>';
+      return null;
+    }
+    sel.innerHTML='<option value="">— Sem pool —</option>'+list.map(r=>
+      `<option value="${r.id}">#${r.id} ${r.nome} · ${r.total_operadores} oper · ${r.total_ops_cobertas} ops${r.bals_usando?' · '+r.bals_usando+' bal(s)':''}</option>`
+    ).join('');
+    const chosen=preferRemId||list[0].id;
+    sel.value=chosen;
+    // Auto-popula j-oper com total_operadores do remanejo escolhido (default)
+    const rem=list.find(r=>r.id===+chosen);
+    if(rem&&rem.total_operadores>0){
+      const operEl=document.getElementById('j-oper');
+      if(operEl){operEl.value=rem.total_operadores;updTakt();}
+    }
+    return chosen;
+  }catch(_){return null;}
+}
+
+async function loadPoolFromRemanejo(remId){
+  if(!remId){JogPoolOps=[];renderOperPool();refreshAlocarBtn();return;}
+  try{
+    const r=await api('/api/remanejos/'+remId);
+    if(!r||!r.operadores_unicos||!r.operadores_unicos.length){
+      JogPoolOps=[];renderOperPool();refreshAlocarBtn();return;
+    }
+    const opers=await api('/api/operadores');
+    const det={};opers.forEach(o=>{det[o.id]=o;});
+    const bid=+document.getElementById('j-id').value||null;
+    let ocupMap={};
+    if(bid){
+      try{
+        const ar=await api('/api/balanceamentos/'+bid+'/atribuicoes');
+        JogAtribOps=ar.atribuicoes||[];
+        (ar.pool||[]).forEach(p=>{ocupMap[p.id]={tempo_alocado:p.tempo_alocado,ocupacao_pct:p.ocupacao_pct};});
+      }catch(_){}
+    }
+    JogPoolOps=r.operadores_unicos.map(oid=>{
+      const o=det[oid]||{id:oid,nome:'Operador #'+oid};
+      const oc=ocupMap[oid]||{tempo_alocado:0,ocupacao_pct:0};
+      return {
+        id:o.id,nome:o.nome,funcao:o.funcao||'',
+        operacoes:o.operacoes||'[]',
+        equipamentos_ids:o.equipamentos_ids||'[]',
+        status:o.status||'Ativo',
+        tempo_alocado:oc.tempo_alocado||0,
+        ocupacao_pct:oc.ocupacao_pct||0,
+      };
+    });
+    renderOperPool();renderTGrid();refreshAlocarBtn();
+  }catch(_){
+    JogPoolOps=[];renderOperPool();refreshAlocarBtn();
+  }
+}
+
+async function loadPoolFromSeqRemanejo(sid){
+  // Carrega lista de remanejos da seq + escolhe default + carrega pool
+  const remId=await loadRemanejosForSeq(sid);
+  await loadPoolFromRemanejo(remId);
+}
+
+async function onRemanejoChange(){
+  const remId=+document.getElementById('j-remanejo').value||null;
+  // Auto-atualiza j-oper com total do remanejo selecionado
+  if(remId){
+    const rem=JogRemanejosList.find(r=>r.id===remId);
+    if(rem&&rem.total_operadores>0){
+      const operEl=document.getElementById('j-oper');
+      if(operEl){operEl.value=rem.total_operadores;updTakt();}
+    }
+  }
+  await loadPoolFromRemanejo(remId);
+}
+
+function applyRemanejoToJog(r){
+  JogRemanejoId=r.id;
+  JogAtribuicoes=r.atribuicoes||{};
+  JogOperadores=r.operadores_detalhe||[];
+  document.getElementById('j-nome').value=r.nome||'';
+  const n=r.operadores_unicos.length;
+  const nt=Math.max(1,Math.floor(n/2));
+  document.getElementById('j-nt').value=nt;
+  buildTimes();
+  const banner=document.getElementById('j-rem-info');
+  banner.style.display='';
+  banner.innerHTML=`🔄 <strong>Remanejo #${r.id} — ${r.nome}</strong> · ${n} operadores no pool · sugestão: ${nt} times (mín 2 op/time)<br>`+
+    `<span style="font-size:11px">${JogOperadores.map(o=>`<span class="bdg bg-b" style="margin:2px;font-size:10px">${o.nome}${o.funcao?' ('+o.funcao+')':''}</span>`).join('')}</span>`;
+}
+
+async function loadJogFromRemanejo(rid){
+  const r=await api('/api/remanejos/'+rid);
+  await loadJogSeqs();
+  document.getElementById('j-seq').value=r.sequencia_id;
+  await loadJogSeq();
+  // loadJogSeq já chama applyRemanejoToJog se remanejo existe pra essa seq
+  if(!JogRemanejoId) applyRemanejoToJog(r);
+  renderTGrid();
+}
+function chipH(o, opMetrics){
+  // opMetrics = {pessoas_op, pessoas_op_ceil, saldo_op, carga_op, gargalo_risco} (opcional)
+  let metricsBadge='';
+  let gargalo=false;
+  if(opMetrics && JogTakt.pcs_pacote>0){
+    const sal=opMetrics.saldo_op;
+    const corSal=sal>0.05?'#16a34a':sal<-0.05?'#dc2626':'#6b7280';
+    gargalo=!!opMetrics.gargalo_risco;
+    const corPess=gargalo?'#ea580c':'#1e3a8a';
+    const flag=gargalo?'<span title="Pessoas decimal está dentro da margem de tolerância — possível gargalo se carga aumentar">⚠</span> ':'';
+    metricsBadge=`<div style="font-size:9px;display:flex;gap:3px;margin-top:2px;flex-wrap:wrap">
+      <span style="background:${corPess};color:#fff;padding:1px 4px;border-radius:6px">${flag}👥${opMetrics.pessoas_op_ceil}<span style="opacity:.7">(${opMetrics.pessoas_op.toFixed(2)})</span></span>
+      <span style="background:${corSal};color:#fff;padding:1px 4px;border-radius:6px">${sal>=0?'+':''}${sal.toFixed(2)}min</span>
+    </div>`;
+  }
+  // Atribuições de operadores nessa op
+  const atribs=JogAtribOps.filter(a=>a.op_id===o.id);
+  let opersBadges='';
+  if(atribs.length){
+    opersBadges=`<div class="op-opers" style="font-size:9px;display:flex;gap:2px;margin-top:2px;flex-wrap:wrap">${
+      atribs.map(a=>{
+        const op=JogPoolOps.find(p=>p.id===a.operador_id);
+        const nome=op?op.nome.split(' ').slice(0,2).join(' '):`#${a.operador_id}`;
+        const cor=op?operColor(op):'#6366f1';
+        const naoQual=a.qualificado===0;
+        return `<span class="op-oper-chip" data-op-id="${o.id}" data-oper-id="${a.operador_id}" style="background:${cor};color:#fff;padding:1px 5px;border-radius:8px;border:${naoQual?'1.5px dashed #fbbf24':'none'}" title="${naoQual?'⚠ NÃO qualificado | ':''}${a.tempo_min.toFixed(2)}min · clique pra remover">${naoQual?'⚠ ':''}${nome} (${a.tempo_min.toFixed(1)})</span>`;
+      }).join('')
+    }</div>`;
+  }
+  const baseStyle=chipStyle(o.equipamento_nome);
+  const finalStyle=gargalo?baseStyle.replace(/border-color:[^;]+/, 'border-color:#ea580c')+';border-width:2px;box-shadow:0 0 0 2px rgba(234,88,12,.18)':baseStyle;
+  return `<div class="chip${gargalo?' gargalo':''} op-target" data-id="${o.id}" draggable="true" style="${finalStyle};display:flex;flex-direction:column;align-items:flex-start;gap:1px" title="${o.equipamento_nome||'—'} | T.P: ${(o.tempo_padrao||0).toFixed(4)}${gargalo?' | ⚠ Gargalo potencial':''}">
+    <div style="display:flex;align-items:center;gap:4px;width:100%">
+      <span style="opacity:.6;font-size:9.5px">${o.seq||o.ordem||''}</span>
+      ${o.operacao.length>20?o.operacao.slice(0,20)+'…':o.operacao}
+      <span style="font-size:9.5px;background:rgba(0,0,0,.08);padding:1px 4px;border-radius:9px;margin-left:auto">${(o.tempo_padrao||0).toFixed(3)}</span>
+    </div>
+    ${metricsBadge}
+    ${opersBadges}
   </div>`;
 }
 function renderPool2(){
@@ -731,30 +1358,134 @@ function renderPool2(){
 }
 function renderTGrid(){
   const c=document.getElementById('tgrid');
+  const cicloCurto=+document.getElementById('j-ciclo').value||15;
+  const takt=JogTakt.takt||0;
+  const pcs=JogTakt.pcs_pacote||0;
   c.innerHTML=JogT.map(t=>{
     const cg=t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0);
-    const pct=ciclo>0?Math.min(cg/ciclo*100,130):0;
-    const cor=tcol(pct), sal=ciclo-cg;
-    const ops=t.ops.map(id=>JogO.find(x=>x.id===id)).filter(Boolean);
+    const opsAll=t.ops.map(id=>JogO.find(x=>x.id===id)).filter(Boolean);
+    // Filtro: só ops com equipamento selecionado
+    const ops=opsAll.filter(o=>{const eq=(o.equipamento_nome||'').trim().toUpperCase();return !eq||EqFiltro.has(eq);});
+    const escondidas=opsAll.length-ops.length;
+    // Pessoas decimal/round per time (planilha-style)
+    const pessoasDec=takt>0?cg/takt:0;
+    const pessoasRound=Math.max(1,Math.round(pessoasDec));
+    // Saldo time: capacidade − demanda
+    const demand=cg*pcs;
+    const supply=pessoasRound*cicloCurto;
+    const saldoTime=supply-demand;
+    // Cor da header: verde (saldo OK), amarelo (próximo zero), vermelho (déficit)
+    const cor=cg===0?'#94a3b8':(saldoTime>=2?'#10b981':saldoTime>=-0.5?'#f59e0b':'#dc2626');
+    const opRefMap={};
+    (t.op_refs||[]).forEach(or=>{opRefMap[or.id]=or;});
+    const corSal=saldoTime>=0?'#16a34a':'#dc2626';
+    const pesLbl=(takt>0&&pcs>0)?`<div style="font-size:10.5px;background:#1e3a8a;color:#fff;padding:4px 8px;border-radius:5px;margin:6px 8px 0;display:flex;justify-content:space-between;flex-wrap:wrap;gap:5px">
+      <span>👥 <strong>${pessoasDec.toFixed(2)}</strong> (~${pessoasRound})</span>
+      <span>TP: <strong>${cg.toFixed(3)}</strong></span>
+      <span>Demanda: <strong>${demand.toFixed(2)}</strong>min</span>
+      <span style="background:${corSal};padding:1px 6px;border-radius:8px">Saldo: <strong>${saldoTime>=0?'+':''}${saldoTime.toFixed(2)}</strong>min</span>
+    </div>`:'';
     return `<div class="tcard">
       <div class="thead2" style="background:${cor}">
         <span>⚙️ TIME ${t.num}</span>
-        <div style="text-align:right;line-height:1.1"><div style="font-size:17px;font-weight:900">${cg.toFixed(3)}</div><div style="font-size:9.5px;opacity:.85">/ ${ciclo} min (${pct.toFixed(0)}%)</div></div>
+        <div style="text-align:right;line-height:1.1"><div style="font-size:17px;font-weight:900">${pessoasDec.toFixed(2)}</div><div style="font-size:9.5px;opacity:.85">pessoas (~${pessoasRound})</div></div>
       </div>
+      ${pesLbl}
       <div class="tzone" id="tz-${t.num}">
-        ${ops.map(o=>chipH(o)).join('')}
+        ${ops.map(o=>chipH(o, opRefMap[o.id]||calcOpMetrics(o))).join('')}
         ${!ops.length?'<span style="font-size:10.5px;color:#94a3b8;font-style:italic">Arraste operações aqui…</span>':''}
       </div>
       <div class="tfoot2">
-        <span style="font-size:10.5px;color:var(--cinza)">Saldo:</span>
-        <div class="pbar"><div class="pfill" style="width:${Math.min(pct,100)}%;background:${cor}"></div></div>
-        <span class="${sal>0.005?'pos':sal<-0.005?'neg':'zer'}" style="min-width:50px;text-align:right">${sal.toFixed(3)}</span>
-        <button class="btn bd bxs" onclick="clearTime(${t.num})" style="margin-left:4px">✕</button>
+        <span style="font-size:10.5px;color:var(--cinza)">${opsAll.length} op${opsAll.length===1?'':'s'}${escondidas>0?` <span style="color:#dc2626">(${escondidas} oculta${escondidas===1?'':'s'})</span>`:''} · cap ${supply.toFixed(0)}min</span>
+        <span style="margin-left:auto"></span>
+        <button class="btn bd bxs" onclick="clearTime(${t.num})">✕</button>
       </div>
     </div>`;
-  }).join('')||'<div style="padding:18px;color:var(--cinza);text-align:center;grid-column:1/-1">Configure o nº de times e clique em Gerar Times / selecione uma sequência</div>';
+  }).join('')||'<div style="padding:18px;color:var(--cinza);text-align:center;grid-column:1/-1">Configure o nº de times e selecione uma sequência</div>';
   JogT.forEach(t=>{const z=document.getElementById('tz-'+t.num);if(z){addZDrop(z,t.num);z.querySelectorAll('.chip').forEach(el=>addDrag(el,t.num));}});
+  // Hook drop de operador → op (chip op-target)
+  document.querySelectorAll('.op-target').forEach(el=>{
+    el.addEventListener('dragover',e=>{
+      if(e.dataTransfer.types.includes('oper-id')){e.preventDefault();el.style.outline='2px solid #6366f1';}
+    });
+    el.addEventListener('dragleave',()=>{el.style.outline='';});
+    el.addEventListener('drop',async e=>{
+      el.style.outline='';
+      const operId=e.dataTransfer.getData('oper-id');
+      if(!operId)return;
+      e.preventDefault();e.stopPropagation();
+      await dropOperOnOp(+el.dataset.id, +operId);
+    });
+  });
+  // Click em sub-chip de operador remove atribuição
+  document.querySelectorAll('.op-oper-chip').forEach(el=>{
+    el.addEventListener('click',async e=>{
+      e.stopPropagation();
+      if(!confirm(`Remover ${el.textContent} desta operação?`))return;
+      await removeAtrib(+el.dataset.opId, +el.dataset.operId);
+    });
+  });
   updInd();
+}
+
+async function dropOperOnOp(opId, operId){
+  const bid=+document.getElementById('j-id').value;
+  if(!bid){toast('Salve o balanceamento primeiro!','error');return;}
+  const op=JogO.find(x=>x.id===opId);if(!op)return;
+  const oper=JogPoolOps.find(p=>p.id===operId);if(!oper)return;
+  // Verifica qualificação
+  let qualificado=true;
+  try{
+    const quals=JSON.parse(oper.operacoes||'[]');
+    qualificado=quals.includes(op.operacao_id);
+  }catch(_){qualificado=false;}
+  // Tempo default = ciclo restante do operador limitado pela demanda da op
+  const ciclo=+document.getElementById('j-ciclo').value||15;
+  const ocupMin=parseFloat(CFG.ocupacao_min_pct||95);
+  const cap=ciclo*(ocupMin/100);
+  const livre=Math.max(0,cap-(oper.tempo_alocado||0));
+  const demanda=(op.tempo_padrao||0)*JogTakt.pcs_pacote;
+  const ja_aloc=JogAtribOps.filter(a=>a.op_id===opId).reduce((s,a)=>s+a.tempo_min,0);
+  const resto_demanda=Math.max(0, demanda-ja_aloc);
+  const tempo=Math.min(livre, resto_demanda||ciclo, ciclo);
+  if(tempo<=0.01){toast(`Operador sem capacidade livre (${oper.ocupacao_pct.toFixed(0)}% ocupado)`,'error');return;}
+  if(!qualificado){
+    if(!confirm(`⚠ ${oper.nome} NÃO é qualificado em ${op.operacao}.\n\nAlocar mesmo assim?`))return;
+  }
+  // Encontra time da op
+  const time=JogT.find(t=>t.ops.includes(opId));
+  const numTime=time?time.num:null;
+  try{
+    await api(`/api/balanceamentos/${bid}/atribuicoes`,'POST',{
+      op_id:opId, operador_id:operId, tempo_min:tempo, numero_time:numTime
+    });
+    await loadAtribuicoes(bid);
+    toast(`${oper.nome} → ${op.operacao} (${tempo.toFixed(1)}min)${qualificado?'':' ⚠ não qualificado'}`,qualificado?undefined:'info');
+  }catch(e){toast('Erro: '+e.message,'error');}
+}
+
+async function removeAtrib(opId, operId){
+  const bid=+document.getElementById('j-id').value;
+  try{
+    await api(`/api/balanceamentos/${bid}/atribuicoes?op_id=${opId}&operador_id=${operId}`,'DELETE');
+    await loadAtribuicoes(bid);
+    toast('Atribuição removida.','info');
+  }catch(e){toast('Erro: '+e.message,'error');}
+}
+function calcOpMetrics(o){
+  // Calcula pessoas_op + saldo_op + gargalo_risco localmente (mesma regra do backend)
+  if(!JogTakt.pcs_pacote||!o)return null;
+  const cicloCurto=+document.getElementById('j-ciclo').value||15;
+  const tp=o.tempo_padrao||0;
+  const pess_dec=(tp*JogTakt.pcs_pacote)/cicloCurto;
+  const tol=parseFloat(CFG.tolerancia_ceil_pct||CFG.gordura_pct||15)/100;
+  const floor_p=Math.floor(pess_dec+1e-9);
+  const threshold=floor_p+tol;
+  const inMargin=(floor_p>=1)&&(pess_dec>floor_p+1e-9)&&(pess_dec<=threshold+1e-9);
+  const pess_eff=inMargin?floor_p:Math.max(1,Math.ceil(pess_dec-1e-9));
+  const carga=(tp*JogTakt.pcs_pacote)/pess_eff;
+  const saldo=cicloCurto-carga;
+  return{pessoas_op:pess_dec,pessoas_op_ceil:pess_eff,carga_op:carga,saldo_op:saldo,gargalo_risco:inMargin};
 }
 function addDrag(el,from){
   el.addEventListener('dragstart',e=>{el.classList.add('dragging');e.dataTransfer.setData('oid',el.dataset.id);e.dataTransfer.setData('from',from==='pool'?'pool':from);e.dataTransfer.effectAllowed='move';});
@@ -772,10 +1503,11 @@ function addPDrop(el){
 }
 function moveTo(oid,from,to){
   if(from!=='pool'){const ft=JogT.find(t=>t.num===+from);if(ft)ft.ops=ft.ops.filter(id=>id!==oid);const op=JogO.find(x=>x.id===oid);if(op)op._in=false;}
+  setTimeout(refreshAlocarBtn,0);
   if(to!=='pool'){const tt=JogT.find(t=>t.num===+to);if(tt&&!tt.ops.includes(oid)){tt.ops.push(oid);const op=JogO.find(x=>x.id===oid);if(op)op._in=true;}}
   renderPool2();renderTGrid();
 }
-function clearTime(n){const t=JogT.find(x=>x.num===n);if(!t)return;t.ops.forEach(id=>{const op=JogO.find(x=>x.id===id);if(op)op._in=false;});t.ops=[];renderPool2();renderTGrid();}
+function clearTime(n){const t=JogT.find(x=>x.num===n);if(!t)return;t.ops.forEach(id=>{const op=JogO.find(x=>x.id===id);if(op)op._in=false;});t.ops=[];renderPool2();renderTGrid();refreshAlocarBtn();}
 function buildTimes(){
   const n=+document.getElementById('j-nt').value||5;
   const old=[...JogT];
@@ -783,13 +1515,59 @@ function buildTimes(){
   old.filter(t=>t.num>n).forEach(t=>t.ops.forEach(id=>{const op=JogO.find(x=>x.id===id);if(op)op._in=false;}));
   renderPool2();renderTGrid();
 }
-function autoBalance(){
+async function autoBalanceTakt(){
   if(!JogO.length){toast('Carregue uma sequência!','error');return;}
+  const minDia=+document.getElementById('j-mins').value||540;
+  const cicloCurto=+document.getElementById('j-ciclo').value||15;
+  const efic=(+document.getElementById('j-efic').value||100)/100;
+  const nOper=+document.getElementById('j-oper').value||0;
+  if(nOper<=0){toast('Defina nº de Operadoras Disp.!','error');return;}
+  const ntHint=+document.getElementById('j-nt').value||0;
+  try{
+    const r=await api('/api/balanceamentos/auto/takt','POST',{
+      ops:JogO.map(o=>({id:o.id,operacao:o.operacao,operacao_id:o.operacao_id,tempo_padrao:o.tempo_padrao,equipamento_nome:o.equipamento_nome})),
+      min_dia:minDia,ciclo_curto:cicloCurto,eficiencia_mostrada:efic,n_operadoras:nOper,
+      n_times:ntHint>0?ntHint:undefined
+    });
+    JogO.forEach(o=>o._in=false);
+    JogT=r.times.map(t=>{
+      t.ops.forEach(oid=>{const op=JogO.find(x=>x.id===oid);if(op)op._in=true;});
+      return{num:t.num,ops:t.ops,op_refs:t.op_refs||[],operadores:[],pessoas:t.pessoas,pessoas_round:t.pessoas_round,t_total:t.t_total};
+    });
+    JogTakt={pcs_pacote:r.pcs_pacote,meta_dia:r.meta_dia,pcs_cab:r.pcs_cab,takt:r.takt,ciclos_dia:r.ciclos_dia,total_pessoas_decimal:r.total_pessoas_decimal,total_pessoas_round:r.total_pessoas_round,gordura_pct:r.gordura_pct,total_tp:r.total_tp};
+    document.getElementById('j-nt').value=JogT.length;
+    renderPool2();renderTGrid();updInd();refreshAlocarBtn();
+    toast(`Takt: ${r.n_times} times · ${r.pcs_pacote} pçs/pacote · meta ${r.meta_dia} · pessoas ${r.total_pessoas_decimal.toFixed(2)}`);
+  }catch(e){toast('Erro takt-balance: '+e.message,'error');}
+}
+async function autoBalance(){
+  if(!JogO.length){toast('Carregue uma sequência!','error');return;}
+  if(JogRemanejoId){
+    try{
+      const sid=parseInt(document.getElementById('j-seq').value||'0',10)||null;
+      const pcs=pcsCicloAtual();
+      const r=await api('/api/balanceamentos/auto','POST',{
+        ops:JogO.map(o=>({id:o.id,operacao:o.operacao,operacao_id:o.operacao_id,tempo_padrao:o.tempo_padrao,equipamento_nome:o.equipamento_nome})),
+        ciclo,remanejo_id:JogRemanejoId,sequencia_id:sid,pcs_ciclo:pcs
+      });
+      JogO.forEach(o=>o._in=false);
+      JogT=r.times.map(t=>{
+        t.ops.forEach(oid=>{const op=JogO.find(x=>x.id===oid);if(op)op._in=true;});
+        return{num:t.num,ops:t.ops,operadores:t.operadores||[]};
+      });
+      document.getElementById('j-nt').value=JogT.length;
+      renderPool2();renderTGrid();
+      const ws=r.warnings||[];
+      if(ws.length){
+        toast(ws[0],'info');
+        console.warn('Auto-balance warnings:',ws);
+      }else toast(`Auto-balance: ${r.n_times} times, ${r.pool_size} operadores no pool.`);
+    }catch(e){toast('Erro auto-balance: '+e.message,'error');}
+    return;
+  }
   const n=+document.getElementById('j-nt').value||5;
-  // Reinicia todos os times e devolve ops ao pool
   JogT=Array.from({length:n},(_,i)=>({num:i+1,ops:[]}));
   JogO.forEach(o=>o._in=false);
-  // Distribui em ordem da sequência: avança de time quando ciclo seria ultrapassado
   let ti=0,load=0;
   for(const op of JogO){
     if(ti>=n)break;
@@ -808,25 +1586,97 @@ function autoBalance(){
 function updInd(){
   const aloc=JogT.reduce((a,t)=>a+t.ops.length,0);
   const total=JogO.reduce((a,o)=>a+(o.tempo_padrao||0),0);
-  const cargas=JogT.map(t=>t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0));
-  const avgCg=cargas.length?cargas.reduce((a,b)=>a+b,0)/cargas.length:0;
-  const efic=ciclo>0?Math.min(avgCg/ciclo*100,100):0;
-  const minsDia=(+document.getElementById('j-efic').value||100)/100*480;
-  const metaEst=ciclo>0?Math.round(minsDia/ciclo):0;
-  document.getElementById('i-total').textContent=total.toFixed(3);
-  document.getElementById('i-aloc').textContent=aloc;
-  document.getElementById('i-times').textContent=JogT.length;
-  document.getElementById('i-efic').textContent=(JogT.length?efic.toFixed(1):'—')+'%';
-  document.getElementById('i-meta').textContent=metaEst||'—';
+  const setEl=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setEl('i-total',total.toFixed(3));
+  setEl('i-aloc',aloc);
+  setEl('i-times',JogT.length);
+  setEl('i-pcp',JogTakt.pcs_pacote||'—');
+  setEl('i-meta',JogTakt.meta_dia?Math.round(JogTakt.meta_dia):'—');
+  setEl('i-pcab',JogTakt.pcs_cab?JogTakt.pcs_cab.toFixed(2):'—');
+  setEl('i-takt',JogTakt.takt?JogTakt.takt.toFixed(4):'—');
+  setEl('i-cdia',JogTakt.ciclos_dia?JogTakt.ciclos_dia.toFixed(1):'—');
+  setEl('i-pesnec',JogTakt.total_pessoas_decimal?JogTakt.total_pessoas_decimal.toFixed(2):'—');
+  // Pessoas reais = soma round por time (planilha-style)
+  let pesRound=0;
+  let gargalos=0;
+  if(JogTakt.takt>0){
+    JogT.forEach(t=>{
+      const cg=t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0);
+      pesRound+=Math.round(cg/JogTakt.takt);
+      // Conta gargalos por op no time (usa op_refs ou recalcula)
+      const opRefMap={};(t.op_refs||[]).forEach(or=>{opRefMap[or.id]=or;});
+      t.ops.forEach(id=>{
+        const o=JogO.find(x=>x.id===id);if(!o)return;
+        const m=opRefMap[id]||calcOpMetrics(o);
+        if(m&&m.gargalo_risco)gargalos++;
+      });
+    });
+  }
+  setEl('i-pesceil',pesRound||'—');
+  const gEl=document.getElementById('i-gargalos');
+  if(gEl){
+    gEl.textContent=gargalos||'0';
+    gEl.style.color=gargalos>0?'#ea580c':'#16a34a';
+  }
 }
-function clearJog(){JogO=[];JogT=[];document.getElementById('jpool').innerHTML='';document.getElementById('tgrid').innerHTML='';['j-nome','j-prod'].forEach(i=>document.getElementById(i).value='');document.getElementById('j-seq').value='';updInd();}
-async function saveJog(){
+function clearJog(){
+  JogO=[];JogT=[];JogRemanejoId=null;JogAtribuicoes={};JogOperadores=[];
+  JogPoolOps=[];JogAtribOps=[];JogEstado='created';
+  JogTakt={pcs_pacote:0,meta_dia:0,pcs_cab:0,takt:0,ciclos_dia:0,total_pessoas_decimal:0,total_pessoas_round:0,gordura_pct:CFG.gordura_pct||15};
+  document.getElementById('jpool').innerHTML='';
+  document.getElementById('tgrid').innerHTML='';
+  ['j-nome','j-prod','j-id'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  document.getElementById('j-seq').value='';
+  const remSel=document.getElementById('j-remanejo');if(remSel)remSel.innerHTML='<option value="">— Sem pool —</option>';
+  const eqt=document.getElementById('eq-tags');if(eqt)eqt.innerHTML='';
+  EqFiltro.clear();
+  const banner=document.getElementById('j-rem-info');if(banner){banner.style.display='none';banner.innerHTML='';}
+  const opersPool=document.getElementById('jpool-opers');if(opersPool)opersPool.innerHTML='';
+  const opersWrap=document.getElementById('jpool-opers-wrap');if(opersWrap)opersWrap.style.display='none';
+  const btn=document.getElementById('btn-alocar');if(btn)btn.style.display='none';
+  updEstadoBadge();
+  updInd();
+}
+async function saveJog(opts){
+  opts=opts||{};
   const nome=document.getElementById('j-nome').value.trim();
   if(!nome){toast('Informe o nome do balanceamento!','error');return;}
   if(!JogT.length){toast('Monte os times primeiro!','error');return;}
-  const times=JogT.map(t=>({numero_time:t.num,operacoes:t.ops.map(id=>{const o=JogO.find(x=>x.id===id);return o?{id,operacao:o.operacao,equipamento_nome:o.equipamento_nome,tempo_padrao:o.tempo_padrao}:null;}).filter(Boolean),carga_total:t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0),saldo:ciclo-t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0)}));
-  const r=await api('/api/balanceamentos','POST',{nome,produto:document.getElementById('j-prod').value,ciclo_minutos:ciclo,meta_dia:+document.getElementById('j-meta').value||0,eficiencia:(+document.getElementById('j-efic').value||100)/100,sequencia_id:document.getElementById('j-seq').value||null,times});
-  toast('Balanceamento salvo! ID: '+r.id);
+  const times=JogT.map(t=>{
+    const opers=Array.isArray(t.operadores)?t.operadores:[];
+    return{
+      numero_time:t.num,
+      operadores:opers,
+      operador_id:opers[0]?opers[0].id:null,
+      operador_nome:opers[0]?opers[0].nome:'',
+      operacoes:t.ops.map(id=>{const o=JogO.find(x=>x.id===id);return o?{id,operacao:o.operacao,equipamento_nome:o.equipamento_nome,tempo_padrao:o.tempo_padrao}:null;}).filter(Boolean),
+      carga_total:t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0),
+      saldo:ciclo-t.ops.reduce((a,id)=>a+(JogO.find(x=>x.id===id)?.tempo_padrao||0),0)
+    };
+  });
+  const cicloCurto=+document.getElementById('j-ciclo').value||15;
+  const balId=+document.getElementById('j-id').value||null;
+  const remId=+document.getElementById('j-remanejo').value||null;
+  const payload={
+    id:balId,
+    nome,
+    produto:document.getElementById('j-prod').value,
+    ciclo_minutos:cicloCurto,
+    meta_dia:Math.round(JogTakt.meta_dia||0),
+    eficiencia:(+document.getElementById('j-efic').value||100)/100,
+    minutos_trabalhados:+document.getElementById('j-mins').value||540,
+    n_operadoras:+document.getElementById('j-oper').value||0,
+    pcs_pacote:JogTakt.pcs_pacote||0,
+    sequencia_id:document.getElementById('j-seq').value||null,
+    remanejo_id:remId,
+    times
+  };
+  const r=await api('/api/balanceamentos','POST',payload);
+  document.getElementById('j-id').value=r.id;
+  toast(`Balanceamento ${balId?'atualizado':'salvo'}! ID: ${r.id}`);
+  await loadJogList();
+  if(!opts.skipClose)closeJogEditor();
+  return r.id;
 }
 
 // ─── DIVISÃO DE TIMES ────────────────────────────────────
@@ -835,65 +1685,262 @@ async function loadDivBals(){
   const s=document.getElementById('dv-sel');
   s.innerHTML='<option value="">— Selecione —</option>'+bals.map(b=>`<option value="${b.id}">${b.nome}${b.produto?' — '+b.produto:''} (${b.ciclo_minutos}min)</option>`).join('');
 }
+let curRelt=null;
 async function loadDiv(){
-  const id=document.getElementById('dv-sel').value; if(!id)return;
-  const [bals,opsAll]=await Promise.all([api('/api/balanceamentos'),api('/api/operadores')]);
-  const b=bals.find(x=>x.id===+id); if(!b)return;
-  curBal=b;
+  const id=document.getElementById('dv-sel').value; if(!id){
+    document.getElementById('div-body').innerHTML='<div class="empty"><div class="ei">📂</div><p>Selecione um balanceamento</p></div>';
+    return;
+  }
+  const r=await api('/api/balanceamentos/'+id+'/relatorio');
+  curRelt=r;curBal={id:r.id,nome:r.nome};
   document.getElementById('dv-exp').style.display='inline-flex';
+  document.getElementById('dv-xlsx').style.display='inline-flex';
   document.getElementById('dv-del').style.display='inline-flex';
-  const ativos=opsAll.filter(o=>o.status==='Ativo');
-  const ttCg=b.times.reduce((a,t)=>a+JSON.parse(t.operacoes||'[]').reduce((aa,o)=>aa+(o.tempo_padrao||0),0),0);
-  const ttOps=b.times.reduce((a,t)=>a+JSON.parse(t.operacoes||'[]').length,0);
-  document.getElementById('div-body').innerHTML=`
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap;font-size:13px">
-      <div><strong>Produto:</strong> ${b.produto||'—'}</div>
-      <div><strong>Ciclo:</strong> ${b.ciclo_minutos} min</div>
-      <div><strong>Meta/dia:</strong> ${b.meta_dia||'—'} pçs</div>
-      <div><strong>Times:</strong> ${b.times.length}</div>
-      <div><strong>T.P. Total:</strong> ${ttCg.toFixed(4)} min</div>
-      <div><strong>Total Ops:</strong> ${ttOps}</div>
-    </div>
-    ${b.times.map(t=>{
-      const ops=JSON.parse(t.operacoes||'[]');
-      const cg=ops.reduce((a,o)=>a+(o.tempo_padrao||0),0);
-      const sal=(b.ciclo_minutos||0)-cg;
-      const pct=b.ciclo_minutos>0?Math.min(cg/b.ciclo_minutos*100,100):0;
-      const cor=tcol(pct);
-      return `<div class="divtc">
-        <div class="divth" style="background:${cor}">
-          <span>⚙️ TIME ${t.numero_time}</span>
-          <div style="display:flex;gap:14px;font-size:11.5px;font-weight:500">
-            <span>Carga: <strong>${cg.toFixed(4)}</strong></span>
-            <span>Saldo: <strong class="${sal>=0?'':'neg'}">${sal.toFixed(4)}</strong></span>
-            <span>${pct.toFixed(1)}%</span>
-          </div>
-        </div>
-        <div class="divtb">
-          <div class="oar">
-            <span style="font-size:12px;font-weight:700;min-width:95px">👤 Colaborador:</span>
-            <select style="flex:1;padding:6px;border:1.5px solid var(--borda);border-radius:5px;font-size:12.5px" id="ops-${t.id}">
-              <option value="">— Atribuir —</option>
-              ${ativos.map(o=>`<option value="${o.id}" ${t.operador_id==o.id?'selected':''}>${o.nome}${o.funcao?' ('+o.funcao+')':''}</option>`).join('')}
-            </select>
-          </div>
-          <div class="tw"><table>
-            <thead><tr><th>#</th><th>Operação</th><th>Equipamento</th><th>T.Padrão</th><th>% do Ciclo</th></tr></thead>
-            <tbody>
-              ${ops.map((o,i)=>{const po=b.ciclo_minutos>0?(o.tempo_padrao||0)/b.ciclo_minutos*100:0;return `<tr>
-                <td><strong>${i+1}</strong></td>
-                <td><strong>${o.operacao}</strong></td>
-                <td><span class="bdg bg-b" style="font-size:10px">${o.equipamento_nome||'—'}</span></td>
-                <td><strong style="color:var(--azul)">${(o.tempo_padrao||0).toFixed(6)}</strong></td>
-                <td><div style="display:flex;align-items:center;gap:5px"><div class="pbar" style="flex:1"><div class="pfill" style="width:${po.toFixed(1)}%;background:${cor}"></div></div><span style="font-size:10.5px;min-width:33px">${po.toFixed(1)}%</span></div></td>
-              </tr>`;}).join('')}
-              <tr style="background:#f0fdf4;font-weight:800"><td colspan="3" style="text-align:right">TOTAL TIME ${t.numero_time}</td><td style="color:var(--verde)">${cg.toFixed(6)}</td><td>${pct.toFixed(1)}%</td></tr>
-            </tbody>
-          </table></div>
-        </div>
-      </div>`;
-    }).join('')}`;
+  const modo=document.getElementById('dv-modo').value||'cards';
+  document.getElementById('div-body').innerHTML=renderReltHeader(r)+(modo==='matriz'?renderReltMatriz(r):renderReltCards(r))+renderReltFooter(r);
 }
+
+function corOcup(p){return p>=99.5?'#dc2626':p>=95?'#16a34a':p>=70?'#3b82f6':p>=40?'#f59e0b':'#94a3b8';}
+
+function renderReltHeader(r){
+  const totalDemanda=r.times.reduce((a,t)=>a+t.demanda_total,0);
+  const totalCap=r.times.reduce((a,t)=>a+t.supply_time,0);
+  const totalSaldo=totalCap-totalDemanda;
+  const totalPess=r.operadores_ocupacao.length;
+  const gargalos=r.times.reduce((a,t)=>a+t.ops.filter(o=>o.gargalo_risco).length,0);
+  const naoQual=r.times.reduce((a,t)=>a+t.ops.reduce((b,o)=>b+o.atribuicoes.filter(at=>!at.qualificado).length,0),0);
+  const estLbl={'created':'🟡 Created','balanced':'🔵 Balanced','concluido':'🟢 Concluído'}[r.estado]||r.estado;
+  return `<div class="relt-card" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:14px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:800">${r.nome}</h2>
+        <div style="font-size:11.5px;color:var(--cinza);margin-top:3px"><strong>Produto:</strong> ${r.produto||'—'} · <strong>Sequência:</strong> ${r.sequencia_nome} · ${estLbl}</div>
+      </div>
+      <div style="font-size:10.5px;text-align:right;color:var(--cinza)">
+        Impresso: ${new Date().toLocaleString('pt-BR')}<br>
+        ID Bal: #${r.id}
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;margin-top:10px">
+      <div><strong>Ciclo:</strong> ${r.ciclo_minutos} min</div>
+      <div><strong>Pcs/Pacote:</strong> ${r.pcs_pacote}</div>
+      <div><strong>Meta/dia:</strong> ${r.meta_dia||'—'} pçs</div>
+      <div><strong>Times:</strong> ${r.times.length}</div>
+      <div><strong>Operadores:</strong> ${totalPess}</div>
+      <div><strong>Demanda total:</strong> ${totalDemanda.toFixed(2)} min</div>
+      <div><strong>Cap. total:</strong> ${totalCap.toFixed(0)} min</div>
+      <div><strong>Saldo:</strong> <span style="color:${totalSaldo>=0?'#16a34a':'#dc2626'};font-weight:800">${totalSaldo>=0?'+':''}${totalSaldo.toFixed(2)}</span> min</div>
+      ${gargalos?`<div style="color:#ea580c">⚠ <strong>${gargalos}</strong> gargalo(s)</div>`:''}
+      ${naoQual?`<div style="color:#dc2626">⚠ <strong>${naoQual}</strong> não-qualif.</div>`:''}
+    </div>
+  </div>`;
+}
+
+function renderReltCards(r){
+  return r.times.map(t=>{
+    const corHd=t.saldo_time>=2?'#16a34a':t.saldo_time>=-0.5?'#f59e0b':'#dc2626';
+    return `<div class="relt-card divtc" style="margin-bottom:12px">
+      <div class="divth" style="background:${corHd};display:flex;justify-content:space-between;align-items:center;padding:10px 14px;color:#fff;border-radius:7px 7px 0 0">
+        <span style="font-size:14px;font-weight:800">⚙️ TIME ${t.numero_time}</span>
+        <div style="display:flex;gap:14px;font-size:11.5px;font-weight:500">
+          <span>👥 <strong>${t.pessoas_round}</strong> (${t.pessoas_dec.toFixed(2)})</span>
+          <span>TP: <strong>${t.tp_total.toFixed(3)}</strong>min/pç</span>
+          <span>Demanda: <strong>${t.demanda_total.toFixed(2)}</strong>min</span>
+          <span>Cap: <strong>${t.supply_time.toFixed(0)}</strong>min</span>
+          <span>Saldo: <strong>${t.saldo_time>=0?'+':''}${t.saldo_time.toFixed(2)}</strong>min</span>
+        </div>
+      </div>
+      <div class="divtb" style="padding:10px;background:#fff;border:1px solid var(--borda);border-top:none;border-radius:0 0 7px 7px">
+        <div class="tw"><table>
+          <thead><tr><th>#</th><th>Operação</th><th>Equip.</th><th>TP</th><th>Demanda</th><th>Pess</th><th>Colaborador → Tempo · % · Pçs</th></tr></thead>
+          <tbody>
+            ${t.ops.map((o,i)=>{
+              const eq=(AE||[]).find(x=>(x.nome||'').toUpperCase()===(o.equipamento_nome||'').toUpperCase());
+              const corEq=eq?eq.cor:'#94a3b8';
+              const flagOp=o.gargalo_risco?'<span title="Gargalo potencial" style="color:#ea580c">⚠ </span>':'';
+              const colabsHtml=o.atribuicoes.length?o.atribuicoes.map(a=>{
+                const flagQ=a.qualificado?'':'<span title="Não qualificado" style="color:#dc2626">⚠ </span>';
+                return `<div style="display:flex;gap:5px;align-items:center;font-size:10.5px;padding:1px 0">
+                  ${flagQ}<strong>${a.operador_nome}</strong>
+                  <span style="color:#6b7280">→ ${a.tempo_min.toFixed(2)}min · <strong>${a.pct_op.toFixed(0)}%</strong> · ${a.pcs_alocadas}pç</span>
+                </div>`;
+              }).join(''):'<span style="color:#dc2626;font-style:italic">— sem operador atribuído</span>';
+              return `<tr>
+                <td><strong>${i+1}</strong></td>
+                <td>${flagOp}<strong>${o.operacao}</strong></td>
+                <td><span class="bdg" style="font-size:9.5px;background:${corEq};color:#fff">${o.equipamento_nome||'—'}</span></td>
+                <td>${o.tempo_padrao.toFixed(4)}</td>
+                <td>${o.demanda_min.toFixed(2)}min</td>
+                <td><strong>${o.pessoas_op_ceil}</strong> <span style="color:#6b7280;font-size:10px">(${o.pessoas_op_dec.toFixed(2)})</span></td>
+                <td>${colabsHtml}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>
+        <div style="margin-top:8px;padding:8px;background:#f1f5f9;border-radius:5px;font-size:10.5px">
+          <strong>Ocupação dos colaboradores deste time:</strong>
+          ${t.operadores_unicos.map(oid=>{
+            const o=r.operadores_ocupacao.find(x=>x.operador_id===oid);
+            if(!o)return '';
+            return `<span class="bdg" style="margin:2px 3px;background:${corOcup(o.ocupacao_pct)};color:#fff;font-size:10px">${o.operador_nome.split(' ').slice(0,2).join(' ')} · ${o.ocupacao_pct.toFixed(0)}%</span>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderReltMatriz(r){
+  // Matriz por time: linhas = ops; colunas = colaboradores únicos do time
+  return r.times.map(t=>{
+    const corHd=t.saldo_time>=2?'#16a34a':t.saldo_time>=-0.5?'#f59e0b':'#dc2626';
+    const colIds=t.operadores_unicos;
+    const colMap={};
+    colIds.forEach(oid=>{const o=r.operadores_ocupacao.find(x=>x.operador_id===oid);colMap[oid]=o;});
+    return `<div class="relt-card relt-matrix" style="margin-bottom:14px">
+      <div style="background:${corHd};color:#fff;padding:8px 12px;border-radius:7px 7px 0 0;display:flex;justify-content:space-between;font-size:12.5px">
+        <span><strong>⚙️ TIME ${t.numero_time}</strong> · ${t.pessoas_round} pessoas (${t.pessoas_dec.toFixed(2)}) · Demanda ${t.demanda_total.toFixed(2)}min · Saldo ${t.saldo_time>=0?'+':''}${t.saldo_time.toFixed(2)}min</span>
+      </div>
+      <div class="tw"><table style="font-size:10.5px">
+        <thead>
+          <tr style="background:#1e3a8a;color:#fff">
+            <th rowspan="2" style="text-align:left;min-width:160px">Operação</th>
+            <th rowspan="2">TP</th>
+            <th rowspan="2">Demanda</th>
+            <th rowspan="2">Pessoas</th>
+            <th colspan="${colIds.length||1}" style="text-align:center">Colaboradores (min · %)</th>
+            <th rowspan="2">Cobertura</th>
+          </tr>
+          <tr style="background:#3b82f6;color:#fff">
+            ${colIds.map(oid=>{const o=colMap[oid];return `<th style="font-size:9.5px">${o?o.operador_nome.split(' ').slice(0,2).join(' '):'#'+oid}</th>`;}).join('')}
+            ${colIds.length===0?'<th style="font-size:9.5px;color:#fbbf24">⚠ sem colaboradores</th>':''}
+          </tr>
+        </thead>
+        <tbody>
+          ${t.ops.map(o=>{
+            const flagOp=o.gargalo_risco?'<span style="color:#ea580c" title="Gargalo">⚠ </span>':'';
+            return `<tr>
+              <td style="text-align:left">${flagOp}<strong>${o.operacao}</strong><br><span style="font-size:9px;color:#6b7280">${o.equipamento_nome||'—'}</span></td>
+              <td>${o.tempo_padrao.toFixed(3)}</td>
+              <td>${o.demanda_min.toFixed(2)}</td>
+              <td><strong>${o.pessoas_op_ceil}</strong><br><span style="font-size:9px;color:#6b7280">(${o.pessoas_op_dec.toFixed(2)})</span></td>
+              ${colIds.map(oid=>{
+                const a=o.atribuicoes.find(x=>x.operador_id===oid);
+                if(!a)return '<td style="color:#cbd5e1">—</td>';
+                const flagQ=a.qualificado?'':'<span style="color:#dc2626" title="Não qualif">⚠</span>';
+                return `<td style="background:#dbeafe">${flagQ}<strong>${a.tempo_min.toFixed(2)}</strong><br><span style="font-size:9px">${a.pct_op.toFixed(0)}% · ${a.pcs_alocadas}pç</span></td>`;
+              }).join('')}
+              ${colIds.length===0?'<td>—</td>':''}
+              <td><strong style="color:${o.cobertura_pct>=99?'#16a34a':o.cobertura_pct>=70?'#f59e0b':'#dc2626'}">${o.cobertura_pct.toFixed(0)}%</strong></td>
+            </tr>`;
+          }).join('')}
+          <tr style="background:#f0fdf4;font-weight:800;border-top:2px solid #16a34a">
+            <td colspan="4" style="text-align:right">TOTAL alocado por colab</td>
+            ${colIds.map(oid=>{const o=colMap[oid];if(!o)return '<td>—</td>';return `<td style="background:${corOcup(o.ocupacao_pct)};color:#fff"><strong>${o.tempo_total.toFixed(2)}</strong><br><span style="font-size:9px">${o.ocupacao_pct.toFixed(0)}%</span></td>`;}).join('')}
+            ${colIds.length===0?'<td>—</td>':''}
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+}
+
+function renderReltFooter(r){
+  // Lista de ocupação geral + espaço pra atribuição manual
+  return `<div class="relt-card" style="background:#fff;border:1px solid var(--borda);border-radius:8px;padding:14px;margin-bottom:14px">
+    <h3 style="margin:0 0 10px;font-size:14px">📊 Ocupação Geral dos Colaboradores</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">
+      ${r.operadores_ocupacao.map(o=>`<span class="bdg" style="font-size:11px;background:${corOcup(o.ocupacao_pct)};color:#fff;padding:3px 9px">
+        ${o.operador_nome} · <strong>${o.ocupacao_pct.toFixed(0)}%</strong> (${o.tempo_total.toFixed(2)}min)
+      </span>`).join('')}
+    </div>
+  </div>
+  <div class="relt-card" style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;margin-bottom:14px">
+    <h3 style="margin:0 0 8px;font-size:13px">📝 Pós-produção (preencher manualmente)</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:11.5px">
+      <div>Pacotes produzidos no turno: ____________</div>
+      <div>Peças totais: ____________</div>
+      <div>% Meta atingida: __________ %</div>
+      <div>Paradas (min): ____________</div>
+      <div>Refugo (peças): ____________</div>
+      <div>Operador supervisor: ____________</div>
+    </div>
+    <div style="margin-top:10px;font-size:11.5px">
+      <div>Observações:</div>
+      <div style="border-bottom:1px solid #cbd5e1;height:18px;margin:4px 0"></div>
+      <div style="border-bottom:1px solid #cbd5e1;height:18px;margin:4px 0"></div>
+      <div style="border-bottom:1px solid #cbd5e1;height:18px;margin:4px 0"></div>
+    </div>
+  </div>
+  <div class="relt-card no-print" style="font-size:10.5px;color:#6b7280;text-align:right">
+    Legenda: ⚠ gargalo/não-qualificado · % = parcela da operação coberta · pç = peças produzidas pelo colaborador
+  </div>`;
+}
+
+// ─── EXPORTS ──────────────────────────────────────────────
+function expDivCsv(){
+  if(!curRelt)return;
+  const r=curRelt;
+  const lines=[`BALANCEAMENTO;${r.nome}`,`Produto;${r.produto||''}`,`Sequência;${r.sequencia_nome}`,`Estado;${r.estado}`,`Ciclo (min);${r.ciclo_minutos}`,`Pcs/Pacote;${r.pcs_pacote}`,`Meta/dia;${r.meta_dia}`,''];
+  lines.push('Time;# Op;Operação;Equipamento;TP;Demanda(min);Pessoas;Operador;Tempo(min);% da Op;Pçs;Qualificado');
+  for(const t of r.times){
+    for(let i=0;i<t.ops.length;i++){
+      const o=t.ops[i];
+      if(!o.atribuicoes.length){
+        lines.push(`${t.numero_time};${i+1};${o.operacao};${o.equipamento_nome||''};${o.tempo_padrao.toFixed(4)};${o.demanda_min.toFixed(2)};${o.pessoas_op_ceil};—;0;0;0;—`);
+      }else{
+        for(const a of o.atribuicoes){
+          lines.push(`${t.numero_time};${i+1};${o.operacao};${o.equipamento_nome||''};${o.tempo_padrao.toFixed(4)};${o.demanda_min.toFixed(2)};${o.pessoas_op_ceil};${a.operador_nome};${a.tempo_min.toFixed(2)};${a.pct_op.toFixed(0)};${a.pcs_alocadas};${a.qualificado?'Sim':'NAO'}`);
+        }
+      }
+    }
+  }
+  lines.push('');
+  lines.push('OCUPAÇÃO GERAL');
+  lines.push('Operador;Função;Tempo total(min);Ocupação%');
+  for(const o of r.operadores_ocupacao){
+    lines.push(`${o.operador_nome};${o.funcao};${o.tempo_total.toFixed(2)};${o.ocupacao_pct.toFixed(2)}`);
+  }
+  const csv='﻿'+lines.join('\n');
+  downloadBlob(csv,`relatorio_bal_${r.id}.csv`,'text/csv;charset=utf-8');
+}
+
+function expDivXlsx(){
+  // Gera HTML com tabela renderizada como .xls (Excel abre HTML)
+  if(!curRelt)return;
+  const r=curRelt;
+  const styled=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body>`;
+  let body=`<h2>${r.nome}</h2><p>Produto: ${r.produto||'—'} · Sequência: ${r.sequencia_nome} · Estado: ${r.estado}</p>`;
+  body+=`<p>Ciclo ${r.ciclo_minutos}min · Pcs/Pacote ${r.pcs_pacote} · Meta/dia ${r.meta_dia} pçs</p>`;
+  body+='<table border="1"><tr style="background:#1e3a8a;color:#fff"><th>Time</th><th>#Op</th><th>Operação</th><th>Equip</th><th>TP</th><th>Demanda</th><th>Pess</th><th>Operador</th><th>Tempo</th><th>%Op</th><th>Pçs</th><th>Qualif</th></tr>';
+  for(const t of r.times){
+    for(let i=0;i<t.ops.length;i++){
+      const o=t.ops[i];
+      if(!o.atribuicoes.length){
+        body+=`<tr><td>${t.numero_time}</td><td>${i+1}</td><td>${o.operacao}</td><td>${o.equipamento_nome||''}</td><td>${o.tempo_padrao.toFixed(4)}</td><td>${o.demanda_min.toFixed(2)}</td><td>${o.pessoas_op_ceil}</td><td>—</td><td>0</td><td>0</td><td>0</td><td>—</td></tr>`;
+      }else{
+        for(const a of o.atribuicoes){
+          body+=`<tr><td>${t.numero_time}</td><td>${i+1}</td><td>${o.operacao}</td><td>${o.equipamento_nome||''}</td><td>${o.tempo_padrao.toFixed(4)}</td><td>${o.demanda_min.toFixed(2)}</td><td>${o.pessoas_op_ceil}</td><td>${a.operador_nome}</td><td>${a.tempo_min.toFixed(2)}</td><td>${a.pct_op.toFixed(0)}</td><td>${a.pcs_alocadas}</td><td>${a.qualificado?'Sim':'NAO'}</td></tr>`;
+        }
+      }
+    }
+  }
+  body+='</table><br><h3>Ocupação Geral</h3><table border="1"><tr style="background:#1e3a8a;color:#fff"><th>Operador</th><th>Função</th><th>Tempo total</th><th>Ocupação%</th></tr>';
+  for(const o of r.operadores_ocupacao){
+    body+=`<tr><td>${o.operador_nome}</td><td>${o.funcao}</td><td>${o.tempo_total.toFixed(2)}</td><td>${o.ocupacao_pct.toFixed(2)}</td></tr>`;
+  }
+  body+='</table></body></html>';
+  downloadBlob(styled+body,`relatorio_bal_${r.id}.xls`,'application/vnd.ms-excel');
+}
+
+function downloadBlob(content,filename,mime){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+}
+
 function expDiv(){if(curBal)location='/api/relatorio/balanceamento/'+curBal.id;}
 async function delBal(){
   if(!curBal)return;
@@ -981,10 +2028,27 @@ function clearOF(){['op-id','op-nome','op-cpf','op-tel','op-func','op-end','op-b
 async function loadEqs(){
   AE=await api('/api/equipamentos'); renderEqs(AE);
   document.getElementById('eq-cnt').textContent=AE.length+' cadastrados';
+  applyEqCodSuggestion();
+}
+function nextEqCodigo(){
+  let max=0;
+  for(const e of AE){
+    const m=(e.codigo||'').match(/^EQ-(\d+)$/i);
+    if(m){const n=parseInt(m[1],10);if(n>max)max=n;}
+  }
+  return 'EQ-'+String(max+1).padStart(3,'0');
+}
+function applyEqCodSuggestion(){
+  const idEl=document.getElementById('eq-id'),codEl=document.getElementById('eq-cod');
+  if(!idEl||!codEl)return;
+  if(idEl.value)return;
+  if(codEl.value.trim())return;
+  codEl.value=nextEqCodigo();
 }
 function renderEqs(d){
   document.getElementById('eq-tb').innerHTML=d.length?d.map(e=>`
-    <tr><td><strong>${e.codigo}</strong></td><td><strong>${e.nome}</strong></td>
+    <tr><td><strong>${e.codigo}</strong></td>
+    <td><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:${e.cor||'#94a3b8'};border:1px solid #cbd5e1;vertical-align:middle;margin-right:5px"></span><strong>${e.nome}</strong></td>
     <td><span class="bdg bg-b">${e.tipo||'—'}</span></td>
     <td>${e.marca||'—'}</td><td>${e.modelo||'—'}</td><td>${e.patrimonio||'—'}</td>
     <td><span class="bdg ${e.status==='Ativo'?'bg-g':e.status==='Em Manutenção'?'bg-y':'bg-r'}">${e.status}</span></td>
@@ -995,7 +2059,7 @@ function filterEqs(){const q=document.getElementById('eq-srch').value.toLowerCas
 async function saveEq(){
   const cod=document.getElementById('eq-cod').value.trim(),nome=document.getElementById('eq-nome').value.trim();
   if(!cod||!nome){toast('Informe código e nome!','error');return;}
-  const d={id:document.getElementById('eq-id').value||null,codigo:cod,nome,tipo:document.getElementById('eq-tipo').value,marca:document.getElementById('eq-marca').value,modelo:document.getElementById('eq-mod').value,patrimonio:document.getElementById('eq-pat').value,status:document.getElementById('eq-st').value,observacoes:document.getElementById('eq-obs').value};
+  const d={id:document.getElementById('eq-id').value||null,codigo:cod,nome,tipo:document.getElementById('eq-tipo').value,marca:document.getElementById('eq-marca').value,modelo:document.getElementById('eq-mod').value,patrimonio:document.getElementById('eq-pat').value,status:document.getElementById('eq-st').value,cor:document.getElementById('eq-cor').value||'#94a3b8',observacoes:document.getElementById('eq-obs').value};
   await api('/api/equipamentos','POST',d); toast(d.id?'Atualizado!':'Equipamento cadastrado!'); clearEF(); loadEqs();
   loadEqsForB();
 }
@@ -1005,41 +2069,140 @@ function editEq(id){
   document.getElementById('eq-nome').value=e.nome; document.getElementById('eq-tipo').value=e.tipo||'';
   document.getElementById('eq-marca').value=e.marca||''; document.getElementById('eq-mod').value=e.modelo||'';
   document.getElementById('eq-pat').value=e.patrimonio||''; document.getElementById('eq-st').value=e.status||'Ativo';
-  document.getElementById('eq-obs').value=e.observacoes||''; window.scrollTo({top:0,behavior:'smooth'});
+  document.getElementById('eq-obs').value=e.observacoes||''; document.getElementById('eq-cor').value=e.cor||'#94a3b8'; window.scrollTo({top:0,behavior:'smooth'});
 }
 async function delEq(id){if(!confirm('Excluir equipamento?'))return;await api('/api/equipamentos/'+id,'DELETE');toast('Excluído!','error');loadEqs();}
-function clearEF(){['eq-id','eq-cod','eq-nome','eq-marca','eq-mod','eq-pat','eq-obs'].forEach(i=>document.getElementById(i).value='');document.getElementById('eq-tipo').value='';document.getElementById('eq-st').value='Ativo';}
+function clearEF(){['eq-id','eq-cod','eq-nome','eq-marca','eq-mod','eq-pat','eq-obs'].forEach(i=>document.getElementById(i).value='');document.getElementById('eq-tipo').value='';document.getElementById('eq-st').value='Ativo';document.getElementById('eq-cor').value='#94a3b8';applyEqCodSuggestion();}
 
 // ─── REMANEJO ─────────────────────────────────────────────
-let RemSeqs=[],RemCurSeq=null,RemSelIdx=null,RemAssigned={};
+let RemSeqs=[],RemCurSeq=null,RemSelIdx=null,RemAssigned={},RemId=null,RemList=[];
 
 async function loadRem(){
   RemSeqs=await api('/api/sequencias');
   const sel=document.getElementById('rem-seq');
   sel.innerHTML='<option value="">— Selecione a sequência —</option>'+RemSeqs.map(s=>`<option value="${s.id}">${s.nome} (${s.itens.length} ops)</option>`).join('');
   document.getElementById('rem-main').style.display='none';
+  document.getElementById('rem-save').style.display='none';
+  document.getElementById('rem-status').style.display='none';
+  await loadRemList();
+}
+
+async function loadRemList(){
+  try{
+    RemList=await api('/api/remanejos');
+    renderRemTable();
+  }catch(_){RemList=[];renderRemTable();}
+}
+
+function renderRemTable(){
+  const tb=document.getElementById('rem-list-tb');if(!tb)return;
+  document.getElementById('rem-list-cnt').textContent=RemList.length;
+  if(!RemList.length){
+    tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:25px;color:var(--cinza)">Nenhum remanejo. Clique em ＋ Novo Remanejo.</td></tr>';
+    return;
+  }
+  tb.innerHTML=RemList.map(r=>`<tr>
+    <td><strong>${r.nome||'—'}</strong></td>
+    <td><span class="bdg bg-b">${r.sequencia_nome||'—'}</span></td>
+    <td>${r.total_operadores||0}</td>
+    <td>${r.total_ops_cobertas||0}</td>
+    <td>${r.bals_usando?`<span class="bdg bg-g">${r.bals_usando}</span>`:'<span style="color:var(--cinza)">0</span>'}</td>
+    <td style="font-size:11px">${(r.criado_em||'').slice(0,16)}</td>
+    <td>
+      <button class="btn bw bxs" onclick="editRem(${r.id})">✏️</button>
+      <button class="btn bd bxs" onclick="delRem(${r.id})">🗑</button>
+    </td>
+  </tr>`).join('');
+}
+
+function showRemEditor(title){
+  document.getElementById('rem-list-card').style.display='none';
+  document.getElementById('rem-editor-card').style.display='';
+  if(title)document.getElementById('rem-editor-title').textContent=title;
+}
+
+function closeRemEditor(){
+  document.getElementById('rem-list-card').style.display='';
+  document.getElementById('rem-editor-card').style.display='none';
+  RemSelIdx=null;RemAssigned={};RemId=null;RemCurSeq=null;
+  document.getElementById('rem-main').style.display='none';
+  document.getElementById('rem-status').style.display='none';
+  document.getElementById('rem-save').style.display='none';
+  ['rem-id','rem-nome','rem-seq'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  loadRemList();
+}
+
+function newRem(){
+  closeRemEditor();
+  showRemEditor('Novo Remanejo');
+  document.getElementById('rem-list-card').style.display='none';
+}
+
+async function editRem(id){
+  const r=RemList.find(x=>x.id===id);if(!r){toast('Remanejo não encontrado','error');return;}
+  showRemEditor(`Editar Remanejo #${id} — ${r.nome}`);
+  document.getElementById('rem-id').value=id;
+  document.getElementById('rem-nome').value=r.nome||'';
+  document.getElementById('rem-seq').value=r.sequencia_id;
+  RemId=id;
+  await startRem();
+}
+
+async function delRem(id){
+  const r=RemList.find(x=>x.id===id);
+  const nome=r?r.nome:'#'+id;
+  const usando=r?r.bals_usando:0;
+  let msg=`Excluir remanejo "${nome}"?\n\nSerá movido pra lixeira (soft delete).`;
+  if(usando>0)msg+=`\n\n⚠ ${usando} balanceamento(s) usam esse pool.`;
+  if(!confirm(msg))return;
+  try{
+    await api('/api/remanejos/'+id,'DELETE');
+    toast('Remanejo excluído (soft delete).','info');
+    loadRemList();
+  }catch(e){toast('Erro: '+e.message,'error');}
 }
 
 async function startRem(){
   const id=+document.getElementById('rem-seq').value;
   if(!id){toast('Selecione uma sequência!','error');return;}
   RemCurSeq=RemSeqs.find(s=>s.id===id);
-  RemSelIdx=null; RemAssigned={};
+  RemSelIdx=null; RemAssigned={}; RemId=null;
   if(!AO.length) AO=await api('/api/operadores');
   if(!AOpc.length) AOpc=await api('/api/operacoes');
   if(!AE.length) AE=await api('/api/equipamentos');
   document.getElementById('rem-main').style.display='';
-  document.getElementById('rem-seq-info').textContent=' · '+RemCurSeq.itens.length+' operações';
+  document.getElementById('rem-save').style.display='';
+  let infoExtra='';
+  let hasExisting=false;
+  try{
+    const ex=await api('/api/remanejos/por-sequencia/'+id);
+    if(ex&&ex.id){
+      RemId=ex.id;
+      const ra={};
+      for(const k in (ex.atribuicoes||{})) ra[parseInt(k,10)]=ex.atribuicoes[k].slice();
+      RemAssigned=ra;
+      hasExisting=true;
+      const totalOps=Object.values(ra).flat().length;
+      const unicos=new Set(Object.values(ra).flat()).size;
+      infoExtra=` · 🔄 Remanejo #${ex.id} carregado (${unicos} operadores, ${totalOps} atribuições)`;
+      toast('Remanejo existente carregado.','info');
+    }
+  }catch(_){/* sem remanejo prévio */}
+  document.getElementById('rem-seq-info').textContent=' · '+RemCurSeq.itens.length+' operações'+infoExtra;
   document.getElementById('rem-right-hd').innerHTML='👥 Operadores Disponíveis';
   document.getElementById('rem-panel').innerHTML='<div class="empty"><div class="ei">👈</div><p>Selecione uma operação ao lado</p></div>';
-  renderRemList();
+  renderRemOpsList();
+  if(hasExisting&&RemCurSeq.itens.length){
+    selectRemIdx(0);
+  }
+  validateRem();
 }
 
 function remAvailable(opcId){
   return AO.filter(o=>{let ids=[];try{ids=JSON.parse(o.operacoes||'[]');}catch(_){}return ids.includes(opcId);});
 }
 
-function renderRemList(){
+function renderRemOpsList(){
   if(!RemCurSeq)return;
   document.getElementById('rem-ops-list').innerHTML=RemCurSeq.itens.map((item,idx)=>{
     const avail=remAvailable(item.operacao_id);
@@ -1064,7 +2227,7 @@ function renderRemList(){
 
 function selectRemIdx(idx){
   RemSelIdx=idx;
-  renderRemList();
+  renderRemOpsList();
   renderRemPanel();
 }
 
@@ -1072,7 +2235,10 @@ function renderRemPanel(){
   if(RemSelIdx===null||!RemCurSeq)return;
   const item=RemCurSeq.itens[RemSelIdx];
   const selIds=RemAssigned[RemSelIdx]||[];
-  const avail=remAvailable(item.operacao_id);
+  const availIds=new Set(remAvailable(item.operacao_id).map(o=>o.id));
+  // Inclui operadores já atribuídos mesmo que não estejam mais habilitados
+  const extra=selIds.filter(id=>!availIds.has(id)).map(id=>AO.find(o=>o.id===id)).filter(Boolean);
+  const avail=[...remAvailable(item.operacao_id),...extra];
 
   document.getElementById('rem-right-hd').innerHTML=
     `👥 <span style="font-weight:500">${item.operacao}</span>`+
@@ -1117,8 +2283,56 @@ function toggleRemAssign(opId){
   const arr=RemAssigned[RemSelIdx];
   const i=arr.indexOf(opId);
   if(i===-1)arr.push(opId);else arr.splice(i,1);
-  renderRemList();
+  renderRemOpsList();
   renderRemPanel();
+  validateRem();
+}
+
+function validateRem(){
+  const saveBtn=document.getElementById('rem-save');
+  const statusEl=document.getElementById('rem-status');
+  if(!RemCurSeq){
+    if(saveBtn)saveBtn.disabled=true;
+    if(statusEl)statusEl.style.display='none';
+    return false;
+  }
+  const faltando=RemCurSeq.itens.map((it,i)=>({i,nome:it.operacao})).filter(x=>!(RemAssigned[x.i]&&RemAssigned[x.i].length));
+  const ok=faltando.length===0;
+  saveBtn.disabled=!ok;
+  if(faltando.length){
+    statusEl.style.display='';
+    statusEl.style.background='#fef2f2';
+    statusEl.style.border='1px solid #fca5a5';
+    statusEl.style.color='#991b1b';
+    statusEl.innerHTML=`⚠️ <strong>${faltando.length} operação(ões) sem operador:</strong> `+faltando.map(f=>`${f.i+1}. ${f.nome}`).join(' · ');
+  }else{
+    const ops=Object.values(RemAssigned).flat();
+    const unicos=new Set(ops);
+    statusEl.style.display='';
+    statusEl.style.background='#f0fdf4';
+    statusEl.style.border='1px solid #86efac';
+    statusEl.style.color='#166534';
+    statusEl.innerHTML=`✅ Pronto para salvar — <strong>${unicos.size}</strong> operadores cobrindo <strong>${RemCurSeq.itens.length}</strong> operações.`;
+  }
+  return ok;
+}
+
+async function saveAndAdvanceRem(){
+  if(!validateRem())return;
+  try{
+    const idOverride=+document.getElementById('rem-id').value||RemId||null;
+    const nomeIn=document.getElementById('rem-nome').value.trim();
+    const r=await api('/api/remanejos','POST',{
+      id:idOverride,nome:nomeIn,sequencia_id:RemCurSeq.id,atribuicoes:RemAssigned
+    });
+    RemId=r.id;
+    document.getElementById('rem-id').value=r.id;
+    toast(`Remanejo ${idOverride?'atualizado':'salvo'}! ID: ${r.id}`);
+    await loadRemList();
+    closeRemEditor();
+  }catch(e){
+    toast('Erro: '+e.message,'error');
+  }
 }
 
 // ─── OPERAÇÕES (CATÁLOGO) ─────────────────────────────────
@@ -1163,8 +2377,40 @@ async function delOpc(id){
 }
 function clearOpcF(){['opc-id','opc-cod','opc-nome'].forEach(i=>document.getElementById(i).value='');}
 
+// ─── CONFIGURAÇÕES ─────────────────────────────────────────
+let CFG={gordura_pct:'15',arred_pacote:'down',min_dia_default:'540',ciclo_curto_default:'15',tolerancia_ceil_pct:'15',ocupacao_min_pct:'95'};
+async function loadCfg(){
+  try{
+    const r=await api('/api/settings');
+    CFG=Object.assign(CFG,r);
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
+    set('cfg-gordura',CFG.gordura_pct);
+    set('cfg-tol',CFG.tolerancia_ceil_pct);
+    set('cfg-arred',CFG.arred_pacote);
+    set('cfg-mindia',CFG.min_dia_default);
+    set('cfg-ciclo',CFG.ciclo_curto_default);
+    set('cfg-ocup',CFG.ocupacao_min_pct);
+  }catch(e){toast('Erro ao carregar configurações: '+e.message,'error');}
+}
+async function saveCfg(){
+  try{
+    const payload={
+      gordura_pct:document.getElementById('cfg-gordura').value,
+      tolerancia_ceil_pct:document.getElementById('cfg-tol').value,
+      arred_pacote:document.getElementById('cfg-arred').value,
+      min_dia_default:document.getElementById('cfg-mindia').value,
+      ciclo_curto_default:document.getElementById('cfg-ciclo').value,
+      ocupacao_min_pct:document.getElementById('cfg-ocup').value,
+    };
+    const r=await api('/api/settings','POST',payload);
+    CFG=Object.assign(CFG,r);
+    toast('Configurações salvas.');
+  }catch(e){toast('Erro ao salvar: '+e.message,'error');}
+}
+
 // ─── INIT ─────────────────────────────────────────────────
 document.getElementById('b-data').value=new Date().toISOString().slice(0,10);
+loadCfg();
 loadDash();
 loadBanco().then(()=>{loadEqsForB();loadOpcsForB();});
 </script>

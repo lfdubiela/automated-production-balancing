@@ -1,0 +1,22 @@
+# Database (auto-created, may contain sensitive data)
+*.db
+*.db.bak*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# IDE / Tooling
+.serena/
+.playwright-mcp/
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
