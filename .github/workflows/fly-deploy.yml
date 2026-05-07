@@ -1,9 +1,16 @@
 name: Deploy to Fly.io
 
+# Dispara em tags v*.*.* (ex: v1.0.0, v2.3.1) ou manualmente
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag/branch para deploy (default: tag atual)'
+        required: false
+        default: ''
 
 jobs:
   deploy:
@@ -12,7 +19,13 @@ jobs:
     concurrency: deploy-group  # serializes deploys
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - name: Show release info
+        run: |
+          echo "Deploying ref: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+      - run: flyctl deploy --remote-only --image-label "${{ github.ref_name }}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

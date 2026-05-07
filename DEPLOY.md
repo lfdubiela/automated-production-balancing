@@ -94,12 +94,14 @@ fly ssh sftp shell
 fly machines restart
 ```
 
-## 9. Auto-deploy via GitHub Actions
+## 9. Auto-deploy via GitHub Actions (via tag)
 
-Já tem `.github/workflows/fly-deploy.yml` no repo. Pra habilitar:
+Workflow em `.github/workflows/fly-deploy.yml` dispara deploy ao **criar tag `v*.*.*`** (semver). Push em `main` NÃO faz deploy automático — só tags.
+
+### Setup (uma vez)
 
 ```bash
-# Gera token
+# Gera token de deploy
 fly tokens create deploy -x 8760h    # 1 ano
 
 # Adiciona como secret no GitHub
@@ -107,7 +109,39 @@ gh secret set FLY_API_TOKEN
 # Cole o token quando pedir
 ```
 
-Daí cada push em `main` dispara deploy automático.
+### Release fluxo
+
+```bash
+# 1. Faz mudanças no código + push pra main (não deploya)
+git push origin main
+
+# 2. Cria tag semver pra release (deploya)
+git tag -a v1.0.0 -m "Primeira release produção"
+git push origin v1.0.0
+
+# 3. Acompanha deploy
+gh run list --workflow=fly-deploy.yml
+gh run watch
+```
+
+### Deploy manual via UI
+
+GitHub → Actions → "Deploy to Fly.io" → Run workflow → escolhe ref (tag ou branch)
+
+### Listar tags / desfazer
+
+```bash
+git tag -l "v*"                 # lista
+git tag -d v1.0.0               # apaga local
+git push origin --delete v1.0.0 # apaga remoto
+```
+
+### Convenção de tags sugerida
+
+- `v1.0.0` major.minor.patch
+- Major = breaking change schema/API
+- Minor = nova feature
+- Patch = bugfix
 
 ## 10. Monitoramento
 
