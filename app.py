@@ -4,12 +4,31 @@ from datetime import datetime
 import io
 
 app = Flask(__name__)
-DB = 'balanceamento.db'
+# DB path from env (default = local dev). Production sets DB_PATH=/data/balanceamento.db (mounted volume).
+DB = os.environ.get('DB_PATH', 'balanceamento.db')
+# Cria diretório do DB se não existir (volume montado vazio em primeira boot)
+_db_dir = os.path.dirname(os.path.abspath(DB))
+if _db_dir and not os.path.exists(_db_dir):
+    try:
+        os.makedirs(_db_dir, exist_ok=True)
+    except OSError:
+        pass
 
 def get_db():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     return conn
+
+@app.route('/healthz')
+def healthz():
+    """Liveness probe — verifica DB acessível."""
+    try:
+        conn = get_db()
+        conn.execute('SELECT 1').fetchone()
+        conn.close()
+        return jsonify({'ok': True, 'db': DB}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 def init_db():
     conn = get_db()

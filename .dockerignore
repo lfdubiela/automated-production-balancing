@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.venv
+venv
+
+# IDE / Tooling
+.serena
+.playwright-mcp
+.vscode
+.idea
+
+# DB backups (use volume in prod)
+*.db
+*.db.bak*
+
+# Docs / dev
+README.md
+DEPLOY.md
+CLAUDE.md
+.github
+
+# OS
+.DS_Store

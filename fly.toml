@@ -1,0 +1,47 @@
+# Fly.io config: balancepro
+# Deploy: `fly deploy`
+# Inicial: `fly launch --no-deploy` (interativo) OU usa este arquivo direto
+# Volume: `fly volumes create balancepro_data --region gru --size 1`
+
+app = "balancepro"
+primary_region = "gru"  # São Paulo
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  FLASK_DEBUG = "0"
+  DB_PATH = "/data/balanceamento.db"
+  PORT = "8080"
+
+[[mounts]]
+  source = "balancepro_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 50
+    soft_limit = 25
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/api/stats"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  cpus = 1
+
+[deploy]
+  strategy = "immediate"
