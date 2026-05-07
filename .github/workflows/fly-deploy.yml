@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: deploy-group  # serializes deploys
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
       - name: Show release info
         run: |
           echo "Deploying ref: ${{ github.ref_name }}"
